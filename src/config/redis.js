@@ -5,7 +5,7 @@ export const redis = new Redis({
   port: process.env.REDIS_PORT,
   maxRetriesPerRequest: null,
   lazyConnect: true,
-  retryStrategy(time) {
+  retryStrategy(times) {
     if (times > 3) {
       return null;
     }
