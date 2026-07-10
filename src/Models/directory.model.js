@@ -23,11 +23,11 @@ const directorySchema = new Schema(
     },
     files: [{ type: Schema.Types.ObjectId, ref: "Files" }],
     directories: [{ type: Schema.Types.ObjectId, ref: "Directories" }],
-    // size: {
-    //   type: Number,
-    //   required: true,
-    //   default: 0,
-    // },
+    size: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
   },
   {
     timestamps: true,

@@ -255,6 +255,7 @@ export const login = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ error: "Invalid Credentials" });
     }
+
     if (!user.isEmailVerified) {
       return res
         .status(400)
@@ -272,6 +273,7 @@ export const login = async (req, res, next) => {
       JSON.stringify({
         userId: user._id,
         email: user.email,
+        storageLimit: user.storageLimit,
         rootDirId: user.rootDirId,
       }),
       "ex",

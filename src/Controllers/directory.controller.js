@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Directories from "../Models/directory.model.js";
 import Files from "../Models/file.model.js";
+import { handleParentDirSize } from "./file.controller.js";
 
 export const createDirectory = async (req, res, next) => {
   const session = await mongoose.startSession();
@@ -15,14 +16,16 @@ export const createDirectory = async (req, res, next) => {
 
     await session.startTransaction();
 
-    const dirResult = await Directories.create(
-      {
-        name: dirName || "Untitled",
-        parentDirId,
-        userId: user.userId,
-        files: [],
-        directories: [],
-      },
+    const [dirResult] = await Directories.create(
+      [
+        {
+          name: dirName || "Untitled",
+          parentDirId,
+          userId: user.userId,
+          files: [],
+          directories: [],
+        },
+      ],
       { session },
     );
 
@@ -119,10 +122,19 @@ export const deleteDir = async (req, res) => {
     if (!dir) {
       return res.status(404).json({ error: "Directory not found" });
     }
+    if (!dir.parentDirId) {
+      return res.status(404).json({ error: "Cannot delete Root Directory" });
+    }
 
     await session.startTransaction();
 
     await delDir(id, Directories, Files, session);
+
+    const updateParentSize = await handleParentDirSize(
+      dir.parentDirId,
+      -dir.size,
+      session,
+    );
 
     await session.commitTransaction();
     return res.json({ message: "Folder Deleted Successfully" });

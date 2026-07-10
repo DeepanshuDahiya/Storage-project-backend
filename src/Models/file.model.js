@@ -22,11 +22,10 @@ const fileSchema = new Schema(
       ref: "User",
       required: true,
     },
-    // size: {
-    //   type: Number,
-    //   required: true,
-    //   default: 0,
-    // },
+    size: {
+      type: Number,
+      required: true,
+    },
   },
   {
     strict: "throw",
