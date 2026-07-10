@@ -2,7 +2,10 @@ import path from "path";
 import Files from "../Models/file.model.js";
 import Directories from "../Models/directory.model.js";
 import mongoose from "mongoose";
-import { createUploadSignedUrl } from "../Config/s3.js";
+import {
+  createGetSignedUrl,
+  createUploadSignedUrl,
+} from "../Services/s3.service.js";
 
 export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
   try {
@@ -115,16 +118,40 @@ export const initiateUploadFile = async (req, res, next) => {
   }
 };
 
-export const completeFileUpload = async(req, res, next) => {
+export const completeFileUpload = async (req, res, next) => {
   try {
-    
   } catch (error) {
-    next(error)
+    next(error);
   }
-}
+};
 
 export const getFile = async (req, res, next) => {
   try {
+    const user = req.user;
+    const fileId = req.params.id;
+    const fileAction = req.query.action === "download" ? "download" : "inline";
+
+    if (!fileId) {
+      return res
+        .status(400)
+        .json({ success: "false", message: "File Id is required." });
+    }
+
+    const file = await Files.findOne({ _id: fileId, userId: user.userId });
+    if (!file)
+      return res
+        .status(404)
+        .json({ success: "false", message: "File not found." });
+
+    const awsFileName = `${file._id}${file.extension}`;
+
+    const getSignedUrl = await createGetSignedUrl({
+      key: awsFileName,
+      action: fileAction,
+      filename: file.name,
+    });
+
+    res.redirect(getSignedUrl);
   } catch (error) {
     next(error);
   }

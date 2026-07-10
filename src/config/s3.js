@@ -9,16 +9,4 @@ const s3Client = new S3Client({
   },
 });
 
-export const createUploadSignedUrl = async ({ key, contentType }) => {
-  const uploadCommand = new PutObjectCommand({
-    Bucket: "deep-storage-project",
-    Key: key,
-    ContentType: contentType,
-  });
-
-  const url = await getSignedUrl(s3Client, uploadCommand, {
-    expiresIn: 60 * 5,
-    signableHeaders: new Set(["content-type"]),
-  });
-  return url;
-};
+export default s3Client;
