@@ -5,7 +5,10 @@ import mongoose from "mongoose";
 import {
   createGetSignedUrl,
   createUploadSignedUrl,
+  getFileDetails,
+  deleteFileFromS3,
 } from "../Services/s3.service.js";
+import { file } from "zod";
 
 export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
   try {
@@ -120,6 +123,34 @@ export const initiateUploadFile = async (req, res, next) => {
 
 export const completeFileUpload = async (req, res, next) => {
   try {
+    const user = req.user;
+    const fileId = req.params.id;
+
+    if (!fileId) {
+      return res
+        .status(400)
+        .json({ success: "false", message: "File Id is required" });
+    }
+
+    const file = await Files.findOne({
+      _id: fileId,
+      userId: user.userId,
+      isUploading: true,
+    });
+    if (!file) {
+      return res
+        .status(404)
+        .json({ success: "false", message: "File does not exists" });
+    }
+
+    const filename = `${file._id}${file.extension}`;
+    const fileDetails = await getFileDetails({ key: filename });
+
+    if (fileDetails.ContentLength !== file.size) {
+      const delFile = await deleteFileFromS3({});
+      console.log(delFile);
+    }
+    return res.json({ success: "true", message: "File upload completed" });
   } catch (error) {
     next(error);
   }
@@ -214,7 +245,6 @@ export const deleteFile = async (req, res, next) => {
       },
       { session },
     );
-    console.log(dirResult, fileResult);
 
     const updateParentSize = await handleParentDirSize(
       fileResult.parentDirId,
@@ -224,7 +254,10 @@ export const deleteFile = async (req, res, next) => {
     if (!updateParentSize.success) {
       throw new Error(updateParentSize.error);
     }
-    console.log(updateParentSize);
+
+    const s3FileName = `${fileResult._id}${fileResult.extension}`;
+
+    const delFile = await deleteFileFromS3({ key: s3FileName });
 
     await session.commitTransaction();
     res
