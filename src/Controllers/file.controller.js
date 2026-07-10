@@ -129,7 +129,8 @@ export const getFile = async (req, res, next) => {
   try {
     const user = req.user;
     const fileId = req.params.id;
-    const fileAction = req.query.action === "download" ? "download" : "inline";
+    const fileAction =
+      req.query.action === "download" ? "attachment" : "inline";
 
     if (!fileId) {
       return res
