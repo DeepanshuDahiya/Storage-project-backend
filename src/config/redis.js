@@ -18,7 +18,7 @@ redis.on("ready", () => {
 });
 
 redis.on("error", (error) => {
-  console.log("Redis error: ", error);
+  console.log("Redis error: ", error.message);
 });
 
 export default async function connectRedis() {

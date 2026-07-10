@@ -2,10 +2,10 @@ import path from "path";
 import Files from "../Models/file.model.js";
 import Directories from "../Models/directory.model.js";
 import mongoose from "mongoose";
+import { createUploadSignedUrl } from "../Config/s3.js";
 
 export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
   try {
-    console.log("updating parent dir size");
     let parent = currentDirId;
     while (parent) {
       const currDir = await Directories.findOneAndUpdate(
@@ -15,9 +15,7 @@ export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
           session,
         },
       );
-      console.log(currDir);
       parent = currDir.parentDirId;
-      console.log(`updating size of ${parent}`);
     }
     return { success: true };
   } catch (err) {
@@ -25,37 +23,30 @@ export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
   }
 };
 
-export const uploadFile = async (req, res, next) => {
-  const fileSize = req.headers.filesize;
-
-  if (!fileSize) {
-    return res
-      .status(400)
-      .json({ success: "false", message: "fileSize is required." });
-  }
+export const initiateUploadFile = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
     const user = req.user;
 
-    const rootDir = await Directories.findById(user.rootDirId);
-    const availableStorageLimit = user.storageLimit - rootDir.size;
+    const parentDirId = req.params.parentDirId || user.rootDirId;
+    const { fileSize, filename, contentType } = req.body;
 
-    console.log(user.storageLimit, rootDir.size);
-
-    if (availableStorageLimit < fileSize) {
+    if (!fileSize || !filename) {
       return res.status(400).json({
         success: "false",
-        message: "File size exceeds available Storage space.",
+        message: "FileSize, contentType and FileName are required.",
       });
     }
 
-    const parentDirId = req.params.parentDirId || user.rootDirId;
+    const rootDir = await Directories.findById(user.rootDirId);
+    const availableStorageLimit = user.storageLimit - rootDir.size;
 
-    const { filename } = req.body;
-    if (!filename) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "File name is required." });
+    if (availableStorageLimit < fileSize) {
+      // return res.destroy();
+      return res.status(507).json({
+        success: "false",
+        message: "File size exceeds you storage limit.",
+      });
     }
 
     const extension = path.extname(filename);
@@ -76,11 +67,11 @@ export const uploadFile = async (req, res, next) => {
           parentDirId,
           userId: user.userId,
           size: Number(fileSize),
+          isUploading: true,
         },
       ],
       { session },
     );
-    console.log(fileResult);
     const fileId = fileResult._id;
 
     const parentFolder = await Directories.findOneAndUpdate(
@@ -92,23 +83,30 @@ export const uploadFile = async (req, res, next) => {
       },
       { session },
     );
-    console.log(parentFolder);
 
     const updateParentSize = await handleParentDirSize(
       fileResult.parentDirId,
       fileResult.size,
       session,
     );
-    console.log(updateParentSize);
     if (!updateParentSize.success) {
       throw new Error(updateParentSize.error);
     }
 
     //upload to cloud here
+
+    const uploadSignedUrl = await createUploadSignedUrl({
+      key: `${fileId}${extension}`,
+      contentType,
+    });
+
     await session.commitTransaction();
-    return res.json({ message: "File Uploaded successfully" });
+    return res.json({
+      message: "File Uploaded initiated successfully",
+      uploadUrl: uploadSignedUrl,
+    });
   } catch (error) {
-    if (session.inTransaction) {
+    if (session.inTransaction()) {
       await session.abortTransaction();
     }
     next(error);
@@ -116,6 +114,14 @@ export const uploadFile = async (req, res, next) => {
     await session.endSession();
   }
 };
+
+export const completeFileUpload = async(req, res, next) => {
+  try {
+    
+  } catch (error) {
+    next(error)
+  }
+}
 
 export const getFile = async (req, res, next) => {
   try {
@@ -185,7 +191,7 @@ export const deleteFile = async (req, res, next) => {
     const updateParentSize = await handleParentDirSize(
       fileResult.parentDirId,
       -fileResult.size,
-      session
+      session,
     );
     if (!updateParentSize.success) {
       throw new Error(updateParentSize.error);

@@ -26,6 +26,11 @@ const fileSchema = new Schema(
       type: Number,
       required: true,
     },
+    isUploading: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
   },
   {
     strict: "throw",

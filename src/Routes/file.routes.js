@@ -1,10 +1,12 @@
 import express from "express";
 import objectIdValidation from "../Middlewares/objectIdValidation.js";
 import {
+  completeFileUpload,
   deleteFile,
   getFile,
+  initiateUploadFile,
   renameFile,
-  uploadFile,
+  // uploadFile,
 } from "../Controllers/file.controller.js";
 
 const router = express.Router();
@@ -12,7 +14,8 @@ const router = express.Router();
 router.param("id", objectIdValidation);
 router.param("parentDirId", objectIdValidation);
 
-router.post("{/:parentDirId}", uploadFile);
+router.post("/initiate{/:parentDirId}", initiateUploadFile);
+router.post("/complete/:id", completeFileUpload);
 router.get("/:id", getFile);
 router.patch("/:id", renameFile);
 router.delete("/:id", deleteFile);
