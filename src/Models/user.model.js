@@ -24,7 +24,7 @@ const userSchema = new Schema(
     rootDirId: {
       type: Schema.Types.ObjectId,
       required: true,
-      //   unique: true,
+      // unique: true,
     },
     isDeleted: {
       type: Boolean,
@@ -36,9 +36,14 @@ const userSchema = new Schema(
       required: true,
       default: false,
     },
+    subscriptionId: {
+      type: Schema.Types.ObjectId,
+      unique: true,
+      default: null,
+    },
     storageLimit: {
       type: Number,
-      default: 5 * 1024 * 1024,
+      default: 500 * 1024 * 1024,
     },
     maxDevices: {
       type: Number,
