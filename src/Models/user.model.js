@@ -36,6 +36,12 @@ const userSchema = new Schema(
       required: true,
       default: false,
     },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      required: true,
+      default: "user",
+    },
     subscriptionId: {
       type: Schema.Types.ObjectId,
       unique: true,

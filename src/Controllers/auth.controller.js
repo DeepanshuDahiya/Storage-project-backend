@@ -275,6 +275,7 @@ export const login = async (req, res, next) => {
         email: user.email,
         storageLimit: user.storageLimit,
         rootDirId: user.rootDirId,
+        role: user.role,
       }),
       "ex",
       60 * 60 * 24 * 30,

@@ -18,7 +18,7 @@ app.use("/auth", authRoutes);
 app.use("/directory", requireAuth, directoryRoutes);
 app.use("/file", requireAuth, fileRoutes);
 
-app.use("/admin/plans", requireAuth, planRoutes);
+app.use("/admin/plans", requireAuth, verifyAdmin, planRoutes);
 
 app.use(errorHandler);
 
