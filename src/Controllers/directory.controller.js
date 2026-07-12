@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Directories from "../Models/directory.model.js";
 import Files from "../Models/file.model.js";
 import { handleParentDirSize } from "./file.controller.js";
+import { deleteFilesFromS3 } from "../Services/s3.service.js";
 
 export const createDirectory = async (req, res, next) => {
   const session = await mongoose.startSession();
@@ -47,7 +48,7 @@ export const createDirectory = async (req, res, next) => {
       dirId: dirResult._id,
     });
   } catch (error) {
-    if (session.inTransaction) {
+    if (session.inTransaction()) {
       await session.abortTransaction();
     }
     next(error);
@@ -128,7 +129,11 @@ export const deleteDir = async (req, res) => {
 
     await session.startTransaction();
 
-    await delDir(id, Directories, Files, session);
+    const allS3Keys = [];
+
+    await delDir(id, Directories, Files, session, allS3Keys);
+
+    const delResult = await deleteMayFilesFromS3({ keys: allS3Keys });
 
     const updateParentSize = await handleParentDirSize(
       dir.parentDirId,
@@ -137,10 +142,10 @@ export const deleteDir = async (req, res) => {
     );
 
     await session.commitTransaction();
-    return res.json({ message: "Folder Deleted Successfully" });
+    return res.json({ message: "Folder Deleted Successfully", allFileIds });
   } catch (error) {
     console.error(error);
-    if (session.inTransaction) {
+    if (session.inTransaction()) {
       await session.abortTransaction;
     }
     return res.status(500).json({ error: error.message });
@@ -150,25 +155,26 @@ export const deleteDir = async (req, res) => {
 };
 
 // delete directory Recursive function
-async function delDir(id, Directories, Files, session) {
-  const currFolder = await Directories.findOne({ _id: id });
+async function delDir(id, Directories, Files, session, allS3Keys) {
+  const currFolder = await Directories.findById(id).populate(
+    "files",
+    "_id extension",
+  );
   if (!currFolder) return;
 
-  // 🔹 1. delete child folders recursively
+  //  delete child folders recursively
   if (currFolder.directories.length) {
     for (const childId of currFolder.directories) {
-      await delDir(childId, Directories, Files);
+      await delDir(childId, Directories, Files, session, allS3Keys);
     }
   }
 
-  // 🔹 2. delete all files in ONE query
+  //  delete all files in ONE query
   if (currFolder.files.length > 0) {
-    // // delete from filesystem
-    // for (const fileId of currFolder.files) {
-    //   const file = await Files.findOne({ _id: new ObjectId(fileId) });
-    //   const fullPath = resolveSafePath(`${fileId.toString()}${file.extension}`);
-    //   await fs.rm(fullPath, { force: true });
-    // }
+    const filesToBeDeleted = currFolder.files.map(
+      (file) => `${file._id}${file.extension}`,
+    );
+    allS3Keys.push(...filesToBeDeleted);
 
     await Files.deleteMany(
       {
@@ -178,7 +184,7 @@ async function delDir(id, Directories, Files, session) {
     );
   }
 
-  // 🔹 3. remove from parent
+  //  remove from parent
   if (currFolder.parentDirId) {
     await Directories.findOneAndUpdate(
       { _id: currFolder.parentDirId },
@@ -189,6 +195,6 @@ async function delDir(id, Directories, Files, session) {
     );
   }
 
-  // 🔹 4. delete current folder
+  //  delete current folder
   await Directories.findOneAndDelete({ _id: id }, { session });
 }

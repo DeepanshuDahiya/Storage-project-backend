@@ -5,10 +5,9 @@ import mongoose from "mongoose";
 import {
   createGetSignedUrl,
   createUploadSignedUrl,
-  getFileDetails,
-  deleteFileFromS3,
+  deleteFilesFromS3,
+  getFileDetailsFromS3,
 } from "../Services/s3.service.js";
-import { file } from "zod";
 
 export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
   try {
@@ -24,8 +23,35 @@ export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
       parent = currDir.parentDirId;
     }
     return { success: true };
-  } catch (err) {
-    return { error: err };
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const deleteFileFromDB = async (fileId, userId, session) => {
+  try {
+    const fileResult = await Files.findOneAndDelete(
+      {
+        _id: fileId,
+        userId: userId,
+      },
+      { session },
+    );
+
+    if (!fileResult) {
+      return res.status(404).send("File not found");
+    }
+
+    const dirResult = await Directories.findOneAndUpdate(
+      { _id: fileResult.parentDirId, userId: user.userId },
+      {
+        $pull: { files: fileResult._id },
+      },
+      { session },
+    );
+    return { fileResult, dirResult };
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -90,17 +116,6 @@ export const initiateUploadFile = async (req, res, next) => {
       { session },
     );
 
-    const updateParentSize = await handleParentDirSize(
-      fileResult.parentDirId,
-      fileResult.size,
-      session,
-    );
-    if (!updateParentSize.success) {
-      throw new Error(updateParentSize.error);
-    }
-
-    //upload to cloud here
-
     const uploadSignedUrl = await createUploadSignedUrl({
       key: `${fileId}${extension}`,
       contentType,
@@ -122,6 +137,7 @@ export const initiateUploadFile = async (req, res, next) => {
 };
 
 export const completeFileUpload = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
     const user = req.user;
     const fileId = req.params.id;
@@ -137,22 +153,52 @@ export const completeFileUpload = async (req, res, next) => {
       userId: user.userId,
       isUploading: true,
     });
+
     if (!file) {
       return res
         .status(404)
         .json({ success: "false", message: "File does not exists" });
     }
 
-    const filename = `${file._id}${file.extension}`;
-    const fileDetails = await getFileDetails({ key: filename });
+    await session.startTransaction();
+
+    const filename = [`${file._id}${file.extension}`];
+    const fileDetails = await getFileDetailsFromS3({ key: filename });
+
+    if (fileDetails.status === 404) {
+      await deleteFileFromDB(fileId, user.userId, session);
+    }
 
     if (fileDetails.ContentLength !== file.size) {
-      const delFile = await deleteFileFromS3({});
-      console.log(delFile);
+      await deleteFilesFromS3({ keys: filename });
+      await deleteFileFromDB(fileId, user.userId, session);
+
+      return req
+        .status(400)
+        .json({ success: "false", message: "File size does not match" });
     }
+
+    await Files.findOneAndUpdate(
+      { _id: fileId, userId: user.userId },
+      { $set: { isUploading: false } },
+      { session },
+    );
+
+    const updateParentSize = await handleParentDirSize(
+      file.parentDirId,
+      file.size,
+      session,
+    );
+
+    await session.commitTransaction();
     return res.json({ success: "true", message: "File upload completed" });
   } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     next(error);
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -227,23 +273,10 @@ export const deleteFile = async (req, res, next) => {
 
     const user = req.user;
 
-    const fileResult = await Files.findOneAndDelete(
-      {
-        _id: id,
-        userId: user.userId,
-      },
-      { session },
-    );
-    if (!fileResult) {
-      return res.status(404).send("File not found");
-    }
-
-    const dirResult = await Directories.findOneAndUpdate(
-      { _id: fileResult.parentDirId, userId: user.userId },
-      {
-        $pull: { files: fileResult._id },
-      },
-      { session },
+    const { fileResult, DirResult } = await deleteFileFromDB(
+      id,
+      user.userId,
+      session,
     );
 
     const updateParentSize = await handleParentDirSize(
@@ -251,20 +284,16 @@ export const deleteFile = async (req, res, next) => {
       -fileResult.size,
       session,
     );
-    if (!updateParentSize.success) {
-      throw new Error(updateParentSize.error);
-    }
 
-    const s3FileName = `${fileResult._id}${fileResult.extension}`;
-
-    const delFile = await deleteFileFromS3({ key: s3FileName });
+    const s3FileName = [`${fileResult._id}${fileResult.extension}`];
+    const delFile = await deleteMayFilesFromS3({ keys: s3FileName });
 
     await session.commitTransaction();
     res
       .status(200)
       .json({ success: "true", message: "File deleted successfully" });
   } catch (error) {
-    if (session.inTransaction) {
+    if (session.inTransaction()) {
       await session.abortTransaction();
     }
     next(error);
