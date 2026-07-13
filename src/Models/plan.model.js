@@ -1,6 +1,6 @@
-import mongoose from "mongoose";
+import mongoose, { Schema, model } from "mongoose";
 
-const featureSchema = new mongoose.Schema(
+const featureSchema = new Schema(
   {
     title: {
       type: String,
@@ -18,7 +18,7 @@ const featureSchema = new mongoose.Schema(
   },
 );
 
-const planSchema = new mongoose.Schema(
+const planSchema = new Schema(
   {
     name: {
       type: String,
@@ -35,7 +35,7 @@ const planSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      index: true,
+      select: false,
     },
 
     currency: {
@@ -87,6 +87,6 @@ const planSchema = new mongoose.Schema(
   },
 );
 
-const Plans = mongoose.model("Plans", planSchema);
+const Plans = mongoose.models.Plans || model("Plans", planSchema);
 
 export default Plans;

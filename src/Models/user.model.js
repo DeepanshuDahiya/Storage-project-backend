@@ -51,6 +51,10 @@ const userSchema = new Schema(
       type: Number,
       default: 500 * 1024 * 1024,
     },
+    maxFileSize: {
+      type: Number,
+      default: 100 * 1024 * 1024,
+    },
     maxDevices: {
       type: Number,
       default: 1,

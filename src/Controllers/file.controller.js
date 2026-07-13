@@ -73,7 +73,7 @@ export const initiateUploadFile = async (req, res, next) => {
     const rootDir = await Directories.findById(user.rootDirId);
     const availableStorageLimit = user.storageLimit - rootDir.size;
 
-    if (availableStorageLimit < fileSize) {
+    if (fileSize > availableStorageLimit || fileSize > user.maxFileSize) {
       // return res.destroy();
       return res.status(507).json({
         success: "false",

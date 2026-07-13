@@ -5,6 +5,7 @@ import authRoutes from "./Routes/auth.routes.js";
 import directoryRoutes from "./Routes/directory.routes.js";
 import fileRoutes from "./Routes/file.routes.js";
 import planRoutes from "./Routes/plan.routes.js";
+import subscriptionRoutes from "./Routes/subscription.routes.js";
 import { errorHandler } from "./Middlewares/error.handler.js";
 import { requireAuth } from "./Middlewares/auth.middleware.js";
 import { verifyAdmin } from "./Middlewares/verifyAdmin.middleware.js";
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use("/auth", authRoutes);
 app.use("/directory", requireAuth, directoryRoutes);
 app.use("/file", requireAuth, fileRoutes);
+app.use("/subscriptions", requireAuth, subscriptionRoutes);
 
 app.use("/admin/plans", requireAuth, verifyAdmin, planRoutes);
 

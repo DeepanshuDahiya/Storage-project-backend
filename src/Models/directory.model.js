@@ -1,5 +1,4 @@
 import { model, Schema } from "mongoose";
-import { maxLength } from "zod";
 
 const directorySchema = new Schema(
   {
