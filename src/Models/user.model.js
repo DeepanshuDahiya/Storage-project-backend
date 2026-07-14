@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose";
+import mongoose, { model, Schema } from "mongoose";
 
 const userSchema = new Schema(
   {
@@ -24,6 +24,7 @@ const userSchema = new Schema(
     rootDirId: {
       type: Schema.Types.ObjectId,
       required: true,
+      ref: "Directories",
       // unique: true,
     },
     isDeleted: {
@@ -38,7 +39,7 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: ["user", "admin", "superAdmin"],
       required: true,
       default: "user",
     },
@@ -46,18 +47,15 @@ const userSchema = new Schema(
       type: Schema.Types.ObjectId,
       unique: true,
       default: null,
+      ref: "Subscriptions",
     },
     storageLimit: {
       type: Number,
-      default: 500 * 1024 * 1024,
+      default: 1024 ** 3,
     },
     maxFileSize: {
       type: Number,
       default: 100 * 1024 * 1024,
-    },
-    maxDevices: {
-      type: Number,
-      default: 1,
     },
   },
   {
@@ -65,6 +63,6 @@ const userSchema = new Schema(
   },
 );
 
-const Users = model("Users", userSchema);
+const Users = mongoose.models.Users || model("Users", userSchema);
 
 export default Users;

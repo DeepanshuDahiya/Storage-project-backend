@@ -81,12 +81,8 @@ export const getDir = async (req, res, next) => {
 export const renameDir = async (req, res, next) => {
   try {
     const user = req.user;
-    const { id } = req.params;
+    const { id } = req.params || user.rootDirId;
     const name = req.body.name || "Untitled";
-
-    if (!id) {
-      id = user.rootDirId;
-    }
 
     const result = await Directories.findOneAndUpdate(
       { _id: id, userId: user.userId },
@@ -127,13 +123,39 @@ export const deleteDir = async (req, res) => {
       return res.status(404).json({ error: "Cannot delete Root Directory" });
     }
 
+    const allS3Keys = [];
+    const dirIds = [];
+    const fileIds = [];
+
+    await collectDeletionData(id, Directories, allS3Keys, dirIds, fileIds);
+
+    const delResult = await deleteFilesFromS3({ keys: allS3Keys });
+
+    await deleteFilesFromS3({ keys: allS3Keys });
+
     await session.startTransaction();
 
-    const allS3Keys = [];
+    await Files.deleteMany(
+      {
+        _id: { $in: fileIds },
+      },
+      { session },
+    );
 
-    await delDir(id, Directories, Files, session, allS3Keys);
+    await Directories.deleteMany(
+      {
+        _id: { $in: dirIds },
+      },
+      { session },
+    );
 
-    const delResult = await deleteMayFilesFromS3({ keys: allS3Keys });
+    await Directories.findOneAndUpdate(
+      { _id: dir.parentDirId },
+      {
+        $pull: { directories: dir._id },
+      },
+      { session },
+    );
 
     const updateParentSize = await handleParentDirSize(
       dir.parentDirId,
@@ -142,11 +164,11 @@ export const deleteDir = async (req, res) => {
     );
 
     await session.commitTransaction();
-    return res.json({ message: "Folder Deleted Successfully", allFileIds });
+    return res.json({ message: "Folder Deleted Successfully" });
   } catch (error) {
     console.error(error);
     if (session.inTransaction()) {
-      await session.abortTransaction;
+      await session.abortTransaction();
     }
     return res.status(500).json({ error: error.message });
   } finally {
@@ -155,46 +177,93 @@ export const deleteDir = async (req, res) => {
 };
 
 // delete directory Recursive function
-async function delDir(id, Directories, Files, session, allS3Keys) {
+export async function collectDeletionData(
+  id,
+  Directories,
+  allS3Keys,
+  dirIds,
+  fileIds,
+) {
   const currFolder = await Directories.findById(id).populate(
     "files",
     "_id extension",
   );
+
   if (!currFolder) return;
 
-  //  delete child folders recursively
-  if (currFolder.directories.length) {
-    for (const childId of currFolder.directories) {
-      await delDir(childId, Directories, Files, session, allS3Keys);
+  // Collect current directory id
+  dirIds.push(currFolder._id);
+
+  // Collect file ids and S3 keys
+  if (currFolder.files.length > 0) {
+    for (const file of currFolder.files) {
+      fileIds.push(file._id);
+      allS3Keys.push(`${file._id}${file.extension}`);
     }
   }
 
-  //  delete all files in ONE query
-  if (currFolder.files.length > 0) {
-    const filesToBeDeleted = currFolder.files.map(
-      (file) => `${file._id}${file.extension}`,
-    );
-    allS3Keys.push(...filesToBeDeleted);
-
-    await Files.deleteMany(
-      {
-        _id: { $in: currFolder.files },
-      },
-      { session },
-    );
+  // Visit all child directories recursively
+  if (currFolder.directories.length > 0) {
+    for (const childId of currFolder.directories) {
+      await collectDeletionData(
+        childId,
+        Directories,
+        allS3Keys,
+        dirIds,
+        fileIds,
+      );
+    }
   }
-
-  //  remove from parent
-  if (currFolder.parentDirId) {
-    await Directories.findOneAndUpdate(
-      { _id: currFolder.parentDirId },
-      {
-        $pull: { directories: id },
-      },
-      { session },
-    );
-  }
-
-  //  delete current folder
-  await Directories.findOneAndDelete({ _id: id }, { session });
 }
+
+// async function delDir(
+//   id,
+//   Directories,
+//   Files,
+//   session,
+//   allS3Keys,
+//   dirIds,
+//   fileIds,
+// ) {
+//   const currFolder = await Directories.findById(id).populate(
+//     "files",
+//     "_id extension",
+//   );
+//   if (!currFolder) return;
+
+//   //  delete child folders recursively
+//   if (currFolder.directories.length) {
+//     for (const childId of currFolder.directories) {
+//       await delDir(childId, Directories, Files, session, allS3Keys);
+//     }
+//   }
+
+//   //  delete all files in ONE query
+//   if (currFolder.files.length > 0) {
+//     const filesToBeDeleted = currFolder.files.map(
+//       (file) => `${file._id}${file.extension}`,
+//     );
+//     allS3Keys.push(...filesToBeDeleted);
+
+//     await Files.deleteMany(
+//       {
+//         _id: { $in: currFolder.files },
+//       },
+//       { session },
+//     );
+//   }
+
+//   //  remove from parent
+//   if (currFolder.parentDirId) {
+//     await Directories.findOneAndUpdate(
+//       { _id: currFolder.parentDirId },
+//       {
+//         $pull: { directories: id },
+//       },
+//       { session },
+//     );
+//   }
+
+//   //  delete current folder
+//   await Directories.findOneAndDelete({ _id: id }, { session });
+// }

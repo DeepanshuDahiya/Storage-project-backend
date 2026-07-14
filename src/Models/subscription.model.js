@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose";
+import mongoose, { model, Schema } from "mongoose";
 
 const subscriptionSchema = new Schema(
   {
@@ -28,16 +28,7 @@ const subscriptionSchema = new Schema(
 
     status: {
       type: String,
-      enum: [
-        "created",
-        "authenticated",
-        "active",
-        "pending",
-        "halted",
-        "cancelled",
-        "completed",
-        "expired",
-      ],
+      enum: ["active", "pending", "cancelled", "processed_by_cron"],
       required: true,
       index: true,
     },
@@ -58,11 +49,6 @@ const subscriptionSchema = new Schema(
     paymentMethod: {
       type: String,
       default: null,
-    },
-
-    paymentId: {
-      type: String,
-      required: true,
     },
 
     currentStart: {
@@ -118,12 +104,14 @@ const subscriptionSchema = new Schema(
       type: Date,
       default: null,
     },
+    gracePeriodEndsAt: Date,
   },
   {
     timestamps: true,
   },
 );
 
-const Subscriptions = model("Subscriptions", subscriptionSchema);
+const Subscriptions =
+  mongoose.models.Subscriptions || model("Subscriptions", subscriptionSchema);
 
 export default Subscriptions;

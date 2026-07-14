@@ -1,10 +1,8 @@
-import razorpay from "../config/razorpay.js";
-import { redis } from "../config/redis.js";
+import razorpay from "../Config/razorpay.js";
 import Plans from "../Models/plan.model.js";
 import Subscriptions from "../Models/subscription.model.js";
-import Users from "../Models/user.model.js";
 import {
-  buildSubscriptionDocument,
+  activateSubscriptionForUser,
   createRazorpaySubscription,
   verifyRazorpaySignature,
 } from "../Services/razorpay.service.js";
@@ -19,6 +17,17 @@ export const createSubscription = async (req, res, next) => {
       return res
         .status(404)
         .json({ success: "false", message: "No Subscription plan found" });
+    }
+
+    const isExistingSubscription = await Subscriptions.findOne({
+      userId: user.userId,
+      status: "active",
+    });
+    if (isExistingSubscription) {
+      return res.status(409).json({
+        success: "false",
+        message: "You already have a subscription active",
+      });
     }
 
     const newSubscriptionId = await createRazorpaySubscription(
@@ -65,6 +74,7 @@ export const verifySubscription = async (req, res, next) => {
       razorpayPaymentId,
       razorpaySubscriptionId,
       razorpaySignature,
+      process.env.RAZORPAY_KEY_SECRET,
     );
 
     if (!isVerifiedSignature) {
@@ -85,31 +95,7 @@ export const verifySubscription = async (req, res, next) => {
       });
     }
 
-    await Subscriptions.create(
-      buildSubscriptionDocument(razorpaySubscription, razorpayPaymentId),
-    );
-
-    const plan = await Plans.findById(razorpaySubscription.notes.planId);
-
-    await Users.findOneAndUpdate(
-      { _id: req.user.userid },
-      { storageLimit: plan.storageLimit, maxFileSize: plan.maxFileSize },
-    );
-
-    await redis.del(req.signedCookies.sid);
-    await redis.set(
-      req.signedCookies.sid,
-      JSON.stringify({
-        userId: req.user._id,
-        email: req.user.email,
-        storageLimit: plan.storageLimit,
-        maxFileSize: plan.maxFileSize,
-        rootDirId: req.user.rootDirId,
-        role: req.user.role,
-      }),
-      "ex",
-      60 * 60 * 24 * 30,
-    );
+    await activateSubscriptionForUser(razorpaySubscription, req.user.userId);
 
     res.json({
       success: "true",

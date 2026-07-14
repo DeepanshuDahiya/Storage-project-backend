@@ -4,7 +4,7 @@ import {
   getPlans,
   importPlan,
   updatePlan,
-} from "../Controllers/razorpayPlan.controller.js";
+} from "../Controllers/razorpayPlan.admin.controller.js";
 
 const router = express.Router();
 

@@ -21,11 +21,16 @@ export const createUploadSignedUrl = async ({ key, contentType }) => {
     });
     return url;
   } catch (error) {
-    return error;
+    throw new Error(error);
   }
 };
 
-export const createGetSignedUrl = async ({ key, action, filename }) => {
+export const createGetSignedUrl = async ({
+  key,
+  action,
+  filename,
+  expiresIn,
+}) => {
   try {
     const getCommand = new GetObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET,
@@ -34,7 +39,7 @@ export const createGetSignedUrl = async ({ key, action, filename }) => {
     });
 
     const url = await getSignedUrl(s3Client, getCommand, {
-      expiresIn: 60 * 5,
+      expiresIn,
     });
     return url;
   } catch (error) {

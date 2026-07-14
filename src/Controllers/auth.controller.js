@@ -307,3 +307,16 @@ export const logout = async (req, res) => {
     next(error);
   }
 };
+
+export const getCurrentUser = async (req, res, next) => {
+  try {
+    const userDetails = await Users.findById(req.user.userId).populate(
+      "rootDirId",
+      "size",
+    );
+
+    return res.json({ userDetails });
+  } catch (error) {
+    next(error);
+  }
+};

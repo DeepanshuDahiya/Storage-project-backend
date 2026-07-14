@@ -1,7 +1,7 @@
 import razorpay from "../config/razorpay.js";
-import Plan from "../models/plan.model.js";
+import Plans from "../models/plan.model.js";
 
-export const importPlan = async (req, res) => {
+export const importPlan = async (req, res, next) => {
   try {
     const { planId } = req.params;
 
@@ -11,7 +11,7 @@ export const importPlan = async (req, res) => {
         .json({ success: "false", message: "Plan Id is required" });
     }
 
-    const alreadyExists = await Plan.findOne({
+    const alreadyExists = await Plans.findOne({
       razorpayPlanId: planId,
     });
 
@@ -41,6 +41,7 @@ export const importPlan = async (req, res) => {
 export const createPlan = async (req, res, next) => {
   try {
     const {
+      name,
       description,
       razorpayPlanId,
       storageLimit,
@@ -50,7 +51,7 @@ export const createPlan = async (req, res, next) => {
       isAvailableToUsers,
     } = req.body;
 
-    const exists = await Plan.findOne({
+    const exists = await Plans.findOne({
       razorpayPlanId,
     });
 
@@ -68,8 +69,8 @@ export const createPlan = async (req, res, next) => {
       });
     }
 
-    const plan = await Plan.create({
-      name,
+    const plan = await Plans.create({
+      name: razorpayPlan.item.name,
       description,
       razorpayPlanId,
       price: razorpayPlan.item.amount,
@@ -93,9 +94,9 @@ export const createPlan = async (req, res, next) => {
   }
 };
 
-export const getPlans = async (req, res) => {
+export const getPlans = async (req, res, next) => {
   try {
-    const plans = await Plan.find({
+    const plans = await Plans.find({
       isActive: true,
     });
 
@@ -118,7 +119,7 @@ export const updatePlan = async (req, res) => {
       isAvailableToUsers,
     } = req.body;
 
-    const plan = await Plan.findByIdAndUpdate(
+    const plan = await Plans.findByIdAndUpdate(
       planId,
       {
         description,
