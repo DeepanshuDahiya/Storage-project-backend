@@ -6,6 +6,8 @@ import {
   createRazorpaySubscription,
   verifyRazorpaySignature,
 } from "../Services/razorpay.service.js";
+import AppError from "../Utils/AppError.js";
+import sendResponse from "../Utils/sendResponse.js";
 
 export const createSubscription = async (req, res, next) => {
   try {
@@ -13,30 +15,25 @@ export const createSubscription = async (req, res, next) => {
     const user = req.user;
 
     const plan = await Plans.findById(planId).select("+razorpayPlanId");
-    if (!plan) {
-      return res
-        .status(404)
-        .json({ success: "false", message: "No Subscription plan found" });
-    }
+    if (!plan) throw new AppError(404, "No Subscription plan found");
 
     const isExistingSubscription = await Subscriptions.findOne({
       userId: user.userId,
       status: "active",
     });
-    if (isExistingSubscription) {
-      return res.status(409).json({
-        success: "false",
-        message: "You already have a subscription active",
-      });
-    }
 
-    const newSubscriptionId = await createRazorpaySubscription(
+    if (isExistingSubscription)
+      throw new AppError(409, "You already have a subscription active");
+
+    const razorpaySubscriptionId = await createRazorpaySubscription(
       plan,
       2,
       user.userId,
     );
 
-    return res.json({ newSubscriptionId });
+    return sendResponse(res, 201, "Subscription created successfully.", {
+      razorpaySubscriptionId,
+    });
   } catch (error) {
     next(error);
   }
@@ -50,25 +47,19 @@ export const verifySubscription = async (req, res, next) => {
       razorpay_signature: razorpaySignature,
     } = req.body;
 
-    if (!razorpaySubscriptionId || !razorpayPaymentId || !razorpaySignature) {
-      return res.status(400).json({
-        success: "false",
-        message:
-          "Razorpay Subscription Id, Payment Id and Signature are required",
-      });
-    }
+    if (!razorpaySubscriptionId || !razorpayPaymentId || !razorpaySignature)
+      throw new AppError(
+        400,
+        "Razorpay Subscription Id, Payment Id and Signature are required",
+      );
 
     const isExistingSubscription = await Subscriptions.findOne({
       userId: req.user.userId,
       razorpaySubscriptionId: razorpaySubscriptionId,
     });
 
-    if (isExistingSubscription) {
-      return res.status(400).json({
-        success: "false",
-        message: "This subscription already exists",
-      });
-    }
+    if (isExistingSubscription)
+      throw new AppError(400, "This subscription already exists");
 
     const isVerifiedSignature = verifyRazorpaySignature(
       razorpayPaymentId,
@@ -77,30 +68,19 @@ export const verifySubscription = async (req, res, next) => {
       process.env.RAZORPAY_KEY_SECRET,
     );
 
-    if (!isVerifiedSignature) {
-      return res.status(400).json({
-        success: "false",
-        message: "Signature does not match",
-      });
-    }
+    if (!isVerifiedSignature)
+      throw new AppError(400, "Signature does not match");
 
     const razorpaySubscription = await razorpay.subscriptions.fetch(
       razorpaySubscriptionId,
     );
 
-    if (!razorpaySubscription) {
-      return res.status(400).json({
-        success: "false",
-        message: "Razorpay Subscription not found.",
-      });
-    }
+    if (!razorpaySubscription)
+      throw new AppError(400, "Razorpay Subscription not found");
 
     await activateSubscriptionForUser(razorpaySubscription, req.user.userId);
 
-    res.json({
-      success: "true",
-      message: "Subscription verification successful",
-    });
+    return sendResponse(res, 200, "Subscription verification successful");
   } catch (error) {
     next(error);
   }

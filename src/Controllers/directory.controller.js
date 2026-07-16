@@ -1,26 +1,39 @@
 import mongoose from "mongoose";
 import Directories from "../Models/directory.model.js";
 import Files from "../Models/file.model.js";
-import { handleParentDirSize } from "./file.controller.js";
 import { deleteFilesFromS3 } from "../Services/s3.service.js";
+import sendResponse from "../Utils/sendResponse.js";
+import AppError from "../Utils/AppError.js";
+import {
+  collectDeletionData,
+  handleParentDirSize,
+} from "../Services/directory.service.js";
+import {
+  createDirectoryBodySchema,
+  createDirectoryParamsSchema,
+  deleteDirectoryParamsSchema,
+  getDirectoryParamsSchema,
+  renameDirectoryBodySchema,
+  renameDirectoryParamsSchema,
+} from "../validation/directory.validation.js";
 
 export const createDirectory = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    const { dirName } = req.body;
+    const { dirName } = await createDirectoryBodySchema.parseAsync(req.body);
+    let { parentDirId } = await createDirectoryParamsSchema.parseAsync(
+      req.params,
+    );
+    parentDirId ??= user.rootDirId;
 
     const user = req.user;
-
-    const parentDirId = req.params.parentDirId
-      ? req.params.parentDirId
-      : user.rootDirId;
 
     await session.startTransaction();
 
     const [dirResult] = await Directories.create(
       [
         {
-          name: dirName || "Untitled",
+          name: dirName,
           parentDirId,
           userId: user.userId,
           files: [],
@@ -30,7 +43,7 @@ export const createDirectory = async (req, res, next) => {
       { session },
     );
 
-    const parentFolder = await Directories.findOneAndUpdate(
+    await Directories.findOneAndUpdate(
       { _id: parentDirId },
       {
         $push: {
@@ -42,9 +55,7 @@ export const createDirectory = async (req, res, next) => {
 
     await session.commitTransaction();
 
-    return res.status(201).json({
-      success: "true",
-      message: "Folder created",
+    return sendResponse(res, 201, "Folder created successfully", {
       dirId: dirResult._id,
     });
   } catch (error) {
@@ -58,21 +69,22 @@ export const createDirectory = async (req, res, next) => {
 };
 
 export const getDir = async (req, res, next) => {
-  const user = req.user;
-  const dirId = req.params.dirId || user.rootDirId;
-
   try {
-    let dirData = await Directories.findOne({ _id: dirId, userId: user.userId })
-      // .fineOneById({ _id: new ObjectId(id) })
+    const user = req.user;
+    let { dirId } = await getDirectoryParamsSchema.parseAsync(req.params);
+    dirId ??= user.rootDirId;
+
+    let dirData = await Directories.findOne({
+      _id: dirId,
+      userId: user.userId,
+    })
       .populate("files")
       .populate("directories")
       .lean();
 
-    if (!dirData) {
-      return res.status(404).json({ error: "Directory not found" });
-    }
+    if (!dirData) throw new AppError(404, "Folder not found");
 
-    return res.status(200).json(dirData);
+    return sendResponse(res, 200, "Folder Data", { dirData });
   } catch (error) {
     next(error);
   }
@@ -81,55 +93,45 @@ export const getDir = async (req, res, next) => {
 export const renameDir = async (req, res, next) => {
   try {
     const user = req.user;
-    const { id } = req.params || user.rootDirId;
-    const name = req.body.name || "Untitled";
+    const { name } = await renameDirectoryBodySchema.parseAsync(req.body);
+    const { id } = await renameDirectoryParamsSchema.parseAsync(req.params);
 
     const result = await Directories.findOneAndUpdate(
       { _id: id, userId: user.userId },
       { $set: { name } },
     );
 
-    if (!result) {
-      return res.status(404).json({ error: "Folder not found" });
-    }
+    if (!result) throw new AppError(404, "Folder not found");
 
-    res.json({ success: "true", message: "Folder name updated" });
+    return sendResponse(res, 200, "Folder name updated");
   } catch (err) {
     next(err);
   }
 };
 
-export const deleteDir = async (req, res) => {
+export const deleteDir = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    const { id } = req.params;
     const user = req.user;
+    const { id } = await deleteDirectoryParamsSchema.parseAsync(req.params);
 
-    if (!id || id == user.rootDirId) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "Valid Dir Id is required." });
-    }
+    if (id == user.rootDirId)
+      throw new AppError(400, "Root Folder cannot be deleted");
 
     const dir = await Directories.findOne({
       _id: id,
       userId: user.userId,
     });
 
-    if (!dir) {
-      return res.status(404).json({ error: "Directory not found" });
-    }
-    if (!dir.parentDirId) {
-      return res.status(404).json({ error: "Cannot delete Root Directory" });
-    }
+    if (!dir) throw new AppError(404, "Folder not found");
+
+    if (!dir.parentDirId) throw new AppError(400, "Cannot delete Root Folder");
 
     const allS3Keys = [];
     const dirIds = [];
     const fileIds = [];
 
-    await collectDeletionData(id, Directories, allS3Keys, dirIds, fileIds);
-
-    const delResult = await deleteFilesFromS3({ keys: allS3Keys });
+    await collectDeletionData(id, allS3Keys, dirIds, fileIds);
 
     await deleteFilesFromS3({ keys: allS3Keys });
 
@@ -157,113 +159,16 @@ export const deleteDir = async (req, res) => {
       { session },
     );
 
-    const updateParentSize = await handleParentDirSize(
-      dir.parentDirId,
-      -dir.size,
-      session,
-    );
+    await handleParentDirSize(dir.parentDirId, -dir.size, session);
 
     await session.commitTransaction();
-    return res.json({ message: "Folder Deleted Successfully" });
+    return sendResponse(res, 200, "Folder deleted successfully");
   } catch (error) {
-    console.error(error);
     if (session.inTransaction()) {
       await session.abortTransaction();
     }
-    return res.status(500).json({ error: error.message });
+    next(error);
   } finally {
     await session.endSession();
   }
 };
-
-// delete directory Recursive function
-export async function collectDeletionData(
-  id,
-  Directories,
-  allS3Keys,
-  dirIds,
-  fileIds,
-) {
-  const currFolder = await Directories.findById(id).populate(
-    "files",
-    "_id extension",
-  );
-
-  if (!currFolder) return;
-
-  // Collect current directory id
-  dirIds.push(currFolder._id);
-
-  // Collect file ids and S3 keys
-  if (currFolder.files.length > 0) {
-    for (const file of currFolder.files) {
-      fileIds.push(file._id);
-      allS3Keys.push(`${file._id}${file.extension}`);
-    }
-  }
-
-  // Visit all child directories recursively
-  if (currFolder.directories.length > 0) {
-    for (const childId of currFolder.directories) {
-      await collectDeletionData(
-        childId,
-        Directories,
-        allS3Keys,
-        dirIds,
-        fileIds,
-      );
-    }
-  }
-}
-
-// async function delDir(
-//   id,
-//   Directories,
-//   Files,
-//   session,
-//   allS3Keys,
-//   dirIds,
-//   fileIds,
-// ) {
-//   const currFolder = await Directories.findById(id).populate(
-//     "files",
-//     "_id extension",
-//   );
-//   if (!currFolder) return;
-
-//   //  delete child folders recursively
-//   if (currFolder.directories.length) {
-//     for (const childId of currFolder.directories) {
-//       await delDir(childId, Directories, Files, session, allS3Keys);
-//     }
-//   }
-
-//   //  delete all files in ONE query
-//   if (currFolder.files.length > 0) {
-//     const filesToBeDeleted = currFolder.files.map(
-//       (file) => `${file._id}${file.extension}`,
-//     );
-//     allS3Keys.push(...filesToBeDeleted);
-
-//     await Files.deleteMany(
-//       {
-//         _id: { $in: currFolder.files },
-//       },
-//       { session },
-//     );
-//   }
-
-//   //  remove from parent
-//   if (currFolder.parentDirId) {
-//     await Directories.findOneAndUpdate(
-//       { _id: currFolder.parentDirId },
-//       {
-//         $pull: { directories: id },
-//       },
-//       { session },
-//     );
-//   }
-
-//   //  delete current folder
-//   await Directories.findOneAndDelete({ _id: id }, { session });
-// }

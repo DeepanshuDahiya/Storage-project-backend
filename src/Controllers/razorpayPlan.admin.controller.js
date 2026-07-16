@@ -1,30 +1,23 @@
 import razorpay from "../config/razorpay.js";
 import Plans from "../models/plan.model.js";
+import AppError from "../Utils/AppError.js";
+import sendResponse from "../Utils/sendResponse.js";
 
 export const importPlan = async (req, res, next) => {
   try {
     const { planId } = req.params;
 
-    if (!planId) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "Plan Id is required" });
-    }
+    if (!planId) throw new AppError(400, "Plan Id is required");
 
     const alreadyExists = await Plans.findOne({
       razorpayPlanId: planId,
     });
 
-    if (alreadyExists) {
-      return res.status(409).json({
-        message: "Plan already imported.",
-      });
-    }
+    if (alreadyExists) throw new AppError(409, "Plan already imported");
 
     const plan = await razorpay.plans.fetch(planId);
 
-    return res.json({
-      success: "true",
+    return sendResponse(res, 201, "Plan imported successfully", {
       name: plan.item.name,
       description: plan.item.description,
       razorpayPlanId: plan.id,
@@ -55,19 +48,12 @@ export const createPlan = async (req, res, next) => {
       razorpayPlanId,
     });
 
-    if (exists) {
-      return res.status(409).json({
-        message: "Plan already exists.",
-      });
-    }
+    if (exists) throw new AppError(409, "Plan already exists.");
 
     const razorpayPlan = await razorpay.plans.fetch(razorpayPlanId);
 
-    if (!razorpayPlan) {
-      return res.status(409).json({
-        message: "Plan does not exists in Razorpay.",
-      });
-    }
+    if (!razorpayPlan)
+      throw new AppError(409, "Plan does not exists in Razorpay.");
 
     const plan = await Plans.create({
       name: razorpayPlan.item.name,
@@ -84,11 +70,7 @@ export const createPlan = async (req, res, next) => {
       isAvailableToUsers,
     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Plan created successfully.",
-      plan,
-    });
+    return sendResponse(res, 201, "Plan created successfully", { plan });
   } catch (error) {
     next(error);
   }
@@ -100,16 +82,15 @@ export const getPlans = async (req, res, next) => {
       isActive: true,
     });
 
-    res.json(plans);
+    return sendResponse(res, 200, "Plans fetched successfully", { plans });
   } catch (error) {
     next(error);
   }
 };
 
-export const updatePlan = async (req, res) => {
+export const updatePlan = async (req, res, next) => {
   try {
     const planId = req.params.id;
-
     const {
       description,
       storageLimit,
@@ -118,6 +99,8 @@ export const updatePlan = async (req, res) => {
       isActive,
       isAvailableToUsers,
     } = req.body;
+
+    if (!planId) throw new AppError(400, "Plan Id is required");
 
     const plan = await Plans.findByIdAndUpdate(
       planId,
@@ -134,7 +117,7 @@ export const updatePlan = async (req, res) => {
       },
     );
 
-    res.json({ success: "true", message: "Plan updated successfully.", plan });
+    return sendResponse(res, 200, "Plan updated successfully", { plan });
   } catch (error) {
     next(error);
   }

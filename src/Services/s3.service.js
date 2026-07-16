@@ -6,6 +6,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import s3Client from "../Config/s3.js";
+import AppError from "../Utils/AppError.js";
 
 export const createUploadSignedUrl = async ({ key, contentType }) => {
   try {
@@ -58,27 +59,22 @@ export const getFileDetailsFromS3 = async ({ key }) => {
     return fileDetails;
   } catch (error) {
     if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) {
-      return { err: "Not Found", statusCode: 404 };
+      throw new AppError(404, "File not Found in s3");
     }
-    return error;
+    throw new AppError(error.code, error.message);
   }
 };
 
 export const deleteFilesFromS3 = async ({ keys }) => {
-  try {
-    const objects = keys.map((key) => ({ Key: key }));
+  const objects = keys.map((key) => ({ Key: key }));
 
-    const deleteCommand = new DeleteObjectsCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
-      Delete: {
-        Objects: objects,
-        Quiet: false,
-      },
-    });
+  const deleteCommand = new DeleteObjectsCommand({
+    Bucket: process.env.AWS_S3_BUCKET,
+    Delete: {
+      Objects: objects,
+      Quiet: false,
+    },
+  });
 
-    const delFiles = await s3Client.send(deleteCommand);
-    return delFiles;
-  } catch (error) {
-    return error;
-  }
+  await s3Client.send(deleteCommand);
 };

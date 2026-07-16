@@ -1,12 +1,19 @@
 import mongoose from "mongoose";
-import { registerSchema } from "../validation/auth.validation.js";
-import emailQueue from "../Queues/email.queue.js";
-import crypto from "crypto";
-import { sendVerificationOtp } from "../Services/otp.service.js";
+import {
+  loginSchema,
+  registerSchema,
+  resendEmailVerificationOtpSchema,
+  sendPasswordResetOtpSchema,
+  verifyEmailSchema,
+  verifyPasswordResetSchema,
+} from "../validation/auth.validation.js";
+import { sendOtp, verifyOtp } from "../Services/otp.service.js";
 import Directories from "../Models/directory.model.js";
 import bcrypt from "bcrypt";
 import Users from "../Models/user.model.js";
 import { redis } from "../config/redis.js";
+import AppError from "../Utils/AppError.js";
+import sendResponse from "../Utils/sendResponse.js";
 
 const otpTypes = {
   email_verification: "email-verification",
@@ -16,8 +23,7 @@ const otpTypes = {
 export const registerUser = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    const parsedInput = await registerSchema.parseAsync(req.body);
-    const { name, email, password } = parsedInput;
+    const { name, email, password } = await registerSchema.parseAsync(req.body);
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -49,104 +55,66 @@ export const registerUser = async (req, res, next) => {
       { session },
     );
 
-    const response = await sendVerificationOtp({
+    await sendOtp({
       email,
       userName: name,
-      queueName: "email-queue",
       purpose: otpTypes.email_verification,
     });
 
-    if (response.error) {
-      throw new Error(response.error);
-    }
     await session.commitTransaction();
-    return res
-      .status(201)
-      .json({ message: "User created Successfully, now verify the user." });
+
+    return sendResponse(
+      res,
+      201,
+      "User created Successfully, now verify the user.",
+    );
   } catch (error) {
     if (session?.inTransaction()) {
       await session.abortTransaction();
     }
     if (error.code === 11000) {
-      next("Email already exists");
+      throw new AppError(409, "Email already exists");
     } else {
       next(error);
     }
   } finally {
-    session.endSession;
-  }
-};
-
-export const verifyEmailByOtp = async (req, res, next) => {
-  const { otp, email } = req.body;
-
-  if (!otp || !email)
-    return res
-      .status(400)
-      .json({ success: "false", message: "valid OTP is required." });
-
-  try {
-    const generatedOtp = await redis.get(
-      `otp:${otpTypes.email_verification}:${email}`,
-    );
-
-    if (!generatedOtp) {
-      return res
-        .status(500)
-        .json({ success: "false", message: "OTP is invalid." });
-    }
-
-    if (otp !== generatedOtp) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "OTP is invalid." });
-    }
-
-    await Users.findOneAndUpdate({ email }, { isEmailVerified: true });
-
-    await redis.del(`otp:${otpTypes.email_verification}:${email}`);
-
-    return res
-      .status(200)
-      .json({ success: "true", message: "User verified successfully" });
-  } catch (error) {
-    next(error);
+    session.endSession();
   }
 };
 
 export const resendEmailVerificationOtp = async (req, res, next) => {
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Email is required" });
-    }
+    const { email } = await resendEmailVerificationOtpSchema.parseAsync(
+      req.body,
+    );
 
     const user = await Users.findOne({ email });
+    if (!user) throw new AppError(400, "User does not exists");
 
-    if (!user) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User does not exists" });
-    }
+    if (user.isEmailVerified)
+      throw new AppError(400, "User is already verified");
 
-    if (user.isEmailVerified) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User is already verified" });
-    }
-
-    const response = await sendVerificationOtp({
+    await sendOtp({
       email,
       userName: user.name,
-      queueName: "email-queue",
       purpose: otpTypes.email_verification,
     });
 
-    if (response.error) {
-      throw new Error(response.error);
-    }
+    return sendResponse(res, 200, "OTP sent successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const verifyEmailByOtp = async (req, res, next) => {
+  try {
+    const { otp, email } = await verifyEmailSchema.parseAsync(req.body);
+
+    await verifyOtp({ email, otp, purpose: otpTypes.email_verification });
+
+    await Users.findOneAndUpdate({ email }, { isEmailVerified: true });
+
+    return sendResponse(res, 200, "User verified successfully");
   } catch (error) {
     next(error);
   }
@@ -154,120 +122,65 @@ export const resendEmailVerificationOtp = async (req, res, next) => {
 
 export const sendOtpForPassReset = async (req, res, next) => {
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Email is required" });
-    }
+    const { email } = await sendPasswordResetOtpSchema.parseAsync(req.body);
 
     const user = await Users.findOne({ email });
 
-    if (!user) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User does not exists" });
-    }
+    if (!user) throw new AppError(400, "User does not exists");
 
-    const response = await sendVerificationOtp({
+    await sendOtp({
       email,
       userName: user.name,
-      queueName: "email-queue",
       purpose: otpTypes.password_reset,
     });
 
-    if (response.error) {
-      throw new Error(response.error);
-    }
-
-    return res
-      .status(200)
-      .json({ success: "true", message: "OTP sent successfully" });
+    return sendResponse(res, 200, "OTP sent successfully");
   } catch (error) {
     next(error);
   }
 };
 
 export const verifyOtpForPassReset = async (req, res, next) => {
-  const { otp, email, newPass } = req.body;
-
-  if (!newPass) {
-    return res
-      .status(400)
-      .json({ success: "false", message: "Enter a valid new password" });
-  }
-
-  if (!otp || !email)
-    return res
-      .status(400)
-      .json({ success: "false", message: "valid OTP and Email is required." });
-
   try {
-    const generatedOtp = await redis.get(
-      `otp:${otpTypes.password_reset}:${email}`,
+    const { otp, email, password } = await verifyPasswordResetSchema.parseAsync(
+      req.body,
     );
 
-    if (!generatedOtp) {
-      return res
-        .status(500)
-        .json({ success: "false", message: "OTP is invalid." });
-    }
+    await verifyOtp({ email, otp, purpose: otpTypes.password_reset });
 
-    if (otp !== generatedOtp) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "OTP is invalid." });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPass, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     await Users.findOneAndUpdate({ email }, { password: hashedPassword });
 
-    await redis.del(`otp:${otpTypes.password_reset}:${email}`);
-
-    return res
-      .status(200)
-      .json({ success: "true", message: "Password changed successfully" });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const changePassword = async (req, res, next) => {
-  try {
+    return sendResponse(res, 200, "Password changed successfully");
   } catch (error) {
     next(error);
   }
 };
 
 export const login = async (req, res, next) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "All fields are required." });
-  }
-
   try {
-    if (req.signedCookies.sid) {
-      return res.status(400).json({ error: "User already logged in" });
-    }
+    const { email, password } = await loginSchema.parseAsync(req.body);
+
+    if (req.signedCookies.sid)
+      return sendResponse(res, 400, "User already logged-in");
 
     const user = await Users.findOne({ email }).select("+password").lean();
-    if (!user) {
-      return res.status(401).json({ error: "Invalid Credentials" });
-    }
 
-    if (!user.isEmailVerified) {
-      return res
-        .status(400)
-        .json({ message: "Verify the user's E-mail to log into the account." });
-    }
+    if (!user) throw new AppError(401, "Invalid Credentials");
+
+    if (!user.isEmailVerified)
+      throw new AppError(
+        400,
+        "Verify the user's E-mail to log into the account.",
+      );
 
     const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: "Invalid Credentials" });
-    }
+
+    if (!isValidPassword) throw new AppError(401, "Invalid Credentials");
 
     let sid = new mongoose.Types.ObjectId().toString();
+
     await redis.set(
       sid,
       JSON.stringify({
@@ -287,22 +200,18 @@ export const login = async (req, res, next) => {
       maxAge: 1000 * 60 * 60 * 24 * 30,
     });
 
-    res
-      .status(201)
-      .json({ success: "true", message: "User logged in successfully" });
+    return sendResponse(res, 200, "User logged in successfully");
   } catch (error) {
     next(error);
   }
 };
 
-export const logout = async (req, res) => {
+export const logout = async (req, res, next) => {
   try {
     await redis.del(req.signedCookies.sid);
     res.clearCookie("sid");
-    return res.json({
-      success: "true",
-      message: "User logged out successfully",
-    });
+
+    return sendResponse(res, 200, "User logged out successfully");
   } catch (error) {
     next(error);
   }
@@ -315,7 +224,7 @@ export const getCurrentUser = async (req, res, next) => {
       "size",
     );
 
-    return res.json({ userDetails });
+    return sendResponse(res, 200, "User fetched successfully", { userDetails });
   } catch (error) {
     next(error);
   }

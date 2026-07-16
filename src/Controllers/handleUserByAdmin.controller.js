@@ -3,7 +3,9 @@ import Users from "../Models/user.model.js";
 import Directories from "../Models/directory.model.js";
 import Files from "../Models/file.model.js";
 import { deleteFilesFromS3 } from "../Services/s3.service.js";
-import { collectDeletionData } from "./directory.controller.js";
+import { collectDeletionData } from "../Services/directory.service.js";
+import sendResponse from "../Utils/sendResponse.js";
+import AppError from "../Utils/AppError.js";
 
 export const getUser = async (req, res, next) => {
   try {
@@ -32,16 +34,16 @@ export const getUser = async (req, res, next) => {
       .populate("rootDirId", "size")
       .lean();
 
+    let hasMore = users.length > maxLimit;
+    if (hasMore) {
+      users.pop();
+    }
+
     const usersWithStorage = users.map((user) => ({
       ...user,
       usedStorage: user.rootDirId?.size || 0,
       availableStorage: user.storageLimit - (user.rootDirId?.size || 0),
     }));
-
-    let hasMore = users.length > maxLimit;
-    if (hasMore) {
-      users.pop();
-    }
 
     let nextCursorId = null;
     if (users.length > 0) {
@@ -49,9 +51,11 @@ export const getUser = async (req, res, next) => {
       nextCursorId = last._id;
     }
 
-    console.log(usersWithStorage, users);
-
-    return res.json({ users: usersWithStorage, nextCursorId, hasMore });
+    return sendResponse(res, 200, "Users fetched successfully", {
+      users: usersWithStorage,
+      nextCursorId,
+      hasMore,
+    });
   } catch (error) {
     next(error);
   }
@@ -62,30 +66,19 @@ export const softDeleteUser = async (req, res, next) => {
     const { email } = req.body;
 
     const user = await Users.findOne({ email });
-    if (!user)
-      return res.status(404).json({
-        success: false,
-        message: "User with this email does not exists",
-      });
-    if (user.isDeleted)
-      return res.status(404).json({
-        success: false,
-        message: "User is already soft delete",
-      });
+    if (!user) throw new AppError(404, "User with this email does not exists");
 
-    if (user.role !== "user" || req.user.role !== "superAdmin") {
-      return res.status(404).json({
-        success: false,
-        message: "User cannot be deleted",
-      });
-    }
+    if (user.isDeleted) throw new AppError(400, "User is already soft deleted");
+
+    if (user.role !== "user" || req.user.role !== "superAdmin")
+      throw new AppError(
+        400,
+        "Admin cannot delete other admins and Super-admin",
+      );
 
     await Users.findOneAndUpdate({ email: email }, { isDeleted: true });
 
-    return res.json({
-      success: true,
-      message: "Soft delete for User done successfully",
-    });
+    return sendResponse(res, 200, "Soft delete for User done successfully");
   } catch (error) {
     next(error);
   }
@@ -96,13 +89,9 @@ export const recoverUser = async (req, res, next) => {
     const { email } = req.body;
 
     const user = await Users.findOneAndUpdate({ email }, { isDeleted: false });
-    if (!user)
-      return res.status(404).json({
-        success: false,
-        message: "User with this email does not exists",
-      });
+    if (!user) throw new AppError(404, "User with this email does not exists");
 
-    return res.json({ success: true, message: "User recovered successfully" });
+    return sendResponse(res, 200, "User recovered successfully");
   } catch (error) {
     next(error);
   }
@@ -114,30 +103,19 @@ export const permanentDeleteUser = async (req, res, next) => {
     const { email } = req.body;
 
     const user = await Users.findOne({ email });
-    if (!user)
-      return res.status(404).json({
-        success: false,
-        message: "User with this email does not exists",
-      });
+    if (!user) throw new AppError(404, "User with this email does not exists");
 
-    if (user.role === "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "Admin accounts cannot be deleted.",
-      });
-    }
+    if (user.role !== "user" || req.user.role !== "superAdmin")
+      throw new AppError(
+        400,
+        "Admin cannot delete other admins and Super-admin",
+      );
 
     const allS3Keys = [];
     const dirIds = [];
     const fileIds = [];
 
-    await collectDeletionData(
-      user.rootDirId,
-      Directories,
-      allS3Keys,
-      dirIds,
-      fileIds,
-    );
+    await collectDeletionData(user.rootDirId, allS3Keys, dirIds, fileIds);
 
     await deleteFilesFromS3({ keys: allS3Keys });
 
@@ -160,13 +138,13 @@ export const permanentDeleteUser = async (req, res, next) => {
     await Users.deleteOne({ _id: user._id }, { session });
 
     await session.commitTransaction();
-    return res.json({ message: "User Permanently Deleted Successfully" });
+
+    return sendResponse(res, 200, "User Permanently Deleted Successfully");
   } catch (error) {
-    console.error(error);
     if (session.inTransaction()) {
       await session.abortTransaction();
     }
-    return res.status(500).json({ error: error.message });
+    next(error);
   } finally {
     await session.endSession();
   }

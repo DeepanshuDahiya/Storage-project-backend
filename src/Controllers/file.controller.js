@@ -8,47 +8,33 @@ import {
   deleteFilesFromS3,
   getFileDetailsFromS3,
 } from "../Services/s3.service.js";
-
-export const handleParentDirSize = async (currentDirId, deltaSize, session) => {
-  try {
-    let parent = currentDirId;
-    while (parent) {
-      const currDir = await Directories.findOneAndUpdate(
-        { _id: parent },
-        { $inc: { size: deltaSize } },
-        {
-          session,
-        },
-      );
-      parent = currDir.parentDirId;
-    }
-    return { success: true };
-  } catch (error) {
-    throw new Error(error);
-  }
-};
+import { handleParentDirSize } from "../Services/directory.service.js";
+import AppError from "../Utils/AppError.js";
+import sendResponse from "../Utils/sendResponse.js";
+import {
+  initiateUploadBodySchema,
+  initiateUploadParamsSchema,
+} from "../validation/file.validation.js";
+import SharedFiles from "../Models/shareFile.model.js";
 
 const deleteFileFromDB = async (fileId, userId, session) => {
-  try {
-    const fileResult = await Files.findOneAndDelete(
-      {
-        _id: fileId,
-        userId: userId,
-      },
-      { session },
-    );
+  const fileResult = await Files.findOneAndDelete(
+    {
+      _id: fileId,
+      userId: userId,
+    },
+    { session },
+  );
+  if (!fileResult) throw new AppError(404, "File not found");
 
-    const dirResult = await Directories.findOneAndUpdate(
-      { _id: fileResult.parentDirId, userId: userId },
-      {
-        $pull: { files: fileResult._id },
-      },
-      { session },
-    );
-    return { fileResult, dirResult };
-  } catch (error) {
-    throw new Error(error);
-  }
+  const dirResult = await Directories.findOneAndUpdate(
+    { _id: fileResult.parentDirId, userId: userId },
+    {
+      $pull: { files: fileResult._id },
+    },
+    { session },
+  );
+  return { fileResult, dirResult };
 };
 
 export const initiateUploadFile = async (req, res, next) => {
@@ -56,34 +42,24 @@ export const initiateUploadFile = async (req, res, next) => {
   try {
     const user = req.user;
 
-    const parentDirId = req.params.parentDirId || user.rootDirId;
-    const { fileSize, filename, contentType } = req.body;
+    const { filename, contentType, fileSize } =
+      await initiateUploadBodySchema.parseAsync(req.body);
 
-    if (!fileSize || !filename) {
-      return res.status(400).json({
-        success: "false",
-        message: "FileSize, contentType and FileName are required.",
-      });
-    }
+    let { parentDirId } = await initiateUploadParamsSchema.parseAsync(
+      req.params,
+    );
+    parentDirId ??= user.rootDirId;
+
+    const extension = path.extname(filename);
+    if (!extension) throw new AppError(400, "File extension is required.");
+
+    const filenameWithoutExtension = path.basename(filename, extension);
 
     const rootDir = await Directories.findById(user.rootDirId);
     const availableStorageLimit = user.storageLimit - rootDir.size;
 
-    if (fileSize > availableStorageLimit || fileSize > user.maxFileSize) {
-      // return res.destroy();
-      return res.status(507).json({
-        success: "false",
-        message: "File size exceeds you storage limit.",
-      });
-    }
-
-    const extension = path.extname(filename);
-    if (!extension) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "File extension is required." });
-    }
-    const filenameWithoutExtension = filename.split(extension)[0];
+    if (fileSize > availableStorageLimit || fileSize > user.maxFileSize)
+      throw new AppError(507, "File size exceeds you storage limit.");
 
     await session.startTransaction();
 
@@ -102,7 +78,7 @@ export const initiateUploadFile = async (req, res, next) => {
     );
     const fileId = fileResult._id;
 
-    const parentFolder = await Directories.findOneAndUpdate(
+    await Directories.findOneAndUpdate(
       { _id: parentDirId },
       {
         $push: {
@@ -118,8 +94,10 @@ export const initiateUploadFile = async (req, res, next) => {
     });
 
     await session.commitTransaction();
-    return res.json({
-      message: "File Uploaded initiated successfully",
+
+    console.log(uploadSignedUrl);
+
+    return sendResponse(res, 200, "File Uploaded initiated successfully", {
       uploadUrl: uploadSignedUrl,
       fileId,
     });
@@ -139,23 +117,14 @@ export const completeFileUpload = async (req, res, next) => {
     const user = req.user;
     const fileId = req.params.id;
 
-    if (!fileId) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "File Id is required" });
-    }
-
+    if (!fileId) throw new AppError(400, "File Id is required");
     const file = await Files.findOne({
       _id: fileId,
       userId: user.userId,
       isUploading: true,
     });
 
-    if (!file) {
-      return res
-        .status(404)
-        .json({ success: "false", message: "File does not exists" });
-    }
+    if (!file) throw new AppError(404, "File does not exists");
 
     await session.startTransaction();
 
@@ -164,15 +133,15 @@ export const completeFileUpload = async (req, res, next) => {
 
     if (fileDetails.status === 404) {
       await deleteFileFromDB(fileId, user.userId, session);
+      throw new AppError(404, "Uploaded file not found on S3");
     }
 
     if (fileDetails.ContentLength !== file.size) {
       await deleteFilesFromS3({ keys: filename });
       await deleteFileFromDB(fileId, user.userId, session);
+      await session.commitTransaction();
 
-      return res
-        .status(400)
-        .json({ success: "false", message: "File size does not match" });
+      return sendResponse(res, 400, "File size does not match");
     }
 
     await Files.findOneAndUpdate(
@@ -181,14 +150,10 @@ export const completeFileUpload = async (req, res, next) => {
       { session },
     );
 
-    const updateParentSize = await handleParentDirSize(
-      file.parentDirId,
-      file.size,
-      session,
-    );
+    await handleParentDirSize(file.parentDirId, file.size, session);
 
     await session.commitTransaction();
-    return res.json({ success: "true", message: "File upload completed" });
+    return sendResponse(res, 201, "File uploaded successfully");
   } catch (error) {
     if (session.inTransaction()) {
       await session.abortTransaction();
@@ -206,17 +171,10 @@ export const getFile = async (req, res, next) => {
     const fileAction =
       req.query.action === "download" ? "attachment" : "inline";
 
-    if (!fileId) {
-      return res
-        .status(400)
-        .json({ success: "false", message: "File Id is required." });
-    }
+    if (!fileId) throw new AppError(400, "File Id is required");
 
     const file = await Files.findOne({ _id: fileId, userId: user.userId });
-    if (!file)
-      return res
-        .status(404)
-        .json({ success: "false", message: "File not found." });
+    if (!file) throw new AppError(404, "File not found");
 
     const awsFileName = `${file._id}${file.extension}`;
 
@@ -239,11 +197,8 @@ export const renameFile = async (req, res, next) => {
     const { id } = req.params;
     const newFilename = req.body.newFilename;
 
-    if (!id || !newFilename) {
-      return res
-        .status(400)
-        .json({ error: "File name and id both are required" });
-    }
+    if (!id || !newFilename)
+      throw new AppError(400, "File name and Id both are required");
 
     const file = await Files.findOneAndUpdate(
       { _id: id, userId: user.userId },
@@ -253,11 +208,9 @@ export const renameFile = async (req, res, next) => {
         },
       },
     );
-    if (!file) {
-      return res.status(404).send("File not found");
-    }
+    if (!file) throw new AppError(404, "File not found");
 
-    return res.json({ message: "Name Updated" });
+    return sendResponse(res, 200, "File name updated successfully");
   } catch (error) {
     next(error);
   }
@@ -268,23 +221,24 @@ export const deleteFile = async (req, res, next) => {
   await session.startTransaction();
   try {
     let { id } = req.params;
+    if (!id) throw new AppError(400, "File Id is required");
 
     const user = req.user;
 
     const file = await Files.findById(id);
+    if (!file) throw new AppError(404, "File not found");
 
     const s3FileName = [`${file._id}${file.extension}`];
 
-    const delFile = await deleteFilesFromS3({ keys: s3FileName });
-
-    await deleteFileFromDB(id, user.userId, session, res);
-
+    await deleteFilesFromS3({ keys: s3FileName });
+    await deleteFileFromDB(id, user.userId, session);
     await handleParentDirSize(file.parentDirId, -file.size, session);
 
+    await SharedFiles.deleteOne({ _id: id });
+
     await session.commitTransaction();
-    res
-      .status(200)
-      .json({ success: "true", message: "File deleted successfully" });
+
+    return sendResponse(res, 200, "File deleted successfully");
   } catch (error) {
     if (session.inTransaction()) {
       await session.abortTransaction();

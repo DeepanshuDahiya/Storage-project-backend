@@ -1,6 +1,8 @@
 import Directories from "../Models/directory.model.js";
 import Files from "../Models/file.model.js";
 import Users from "../Models/user.model.js";
+import AppError from "../Utils/AppError.js";
+import sendResponse from "../Utils/sendResponse.js";
 
 export const makeAdmin = async (req, res, next) => {
   try {
@@ -8,29 +10,16 @@ export const makeAdmin = async (req, res, next) => {
 
     const user = await Users.findById(userId);
 
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
+    if (!user) throw new AppError(404, "User not found");
 
-    if (user.role === "admin") {
-      return res.status(400).json({
-        message: "User is already an admin",
-      });
-    }
-
-    if (user.role === "superAdmin") {
-      return res.status(400).json({
-        message: "Super admin role cannot be modified.",
-      });
-    }
+    if (user.role === "admin")
+      throw new AppError(403, "User is already an admin");
+    if (user.role === "superAdmin")
+      throw new AppError(403, "Super admin role cannot be modified");
 
     await Users.findOneAndUpdate({ _id: userId }, { role: "admin" });
 
-    return res.json({
-      message: "User promoted to admin successfully",
-    });
+    return sendResponse(res, 200, "User role updated to 'admin' successfully.");
   } catch (error) {
     next(error);
   }
@@ -42,35 +31,22 @@ export const makeUser = async (req, res, next) => {
 
     const user = await Users.findById(userId);
 
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
+    if (!user) throw new AppError(404, "User not found");
 
-    if (user.role === "user") {
-      return res.status(400).json({
-        message: "User is already have the role: user",
-      });
-    }
-
-    if (user.role === "superAdmin") {
-      return res.status(400).json({
-        message: "Super admin role cannot be modified.",
-      });
-    }
+    if (user.role === "user")
+      throw new AppError(403, "User is already have the role: user");
+    if (user.role === "superAdmin")
+      throw new AppError(403, "Super admin role cannot be modified");
 
     await Users.findOneAndUpdate({ _id: userId }, { role: "user" });
 
-    return res.json({
-      message: "User demoted to admin successfully",
-    });
+    return sendResponse(res, 200, "User role updated to 'user' successfully.");
   } catch (error) {
     next(error);
   }
 };
 
-export const getSystemStats = async (req, res) => {
+export const getSystemStats = async (req, res, next) => {
   try {
     const [
       totalUsers,
@@ -88,7 +64,7 @@ export const getSystemStats = async (req, res) => {
       Directories.aggregate([
         {
           $match: {
-            parentId: null,
+            parentDiriD: null,
           },
         },
         {
@@ -102,7 +78,7 @@ export const getSystemStats = async (req, res) => {
       ]),
     ]);
 
-    return res.json({
+    return sendResponse(res, 200, "Site statistics fetched successfully", {
       totalUsers,
       totalAdmins,
       totalSuperAdmins,

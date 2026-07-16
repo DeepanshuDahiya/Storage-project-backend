@@ -3,6 +3,7 @@ import razorpay from "../config/razorpay.js";
 import Subscriptions from "../Models/subscription.model.js";
 import Plans from "../Models/plan.model.js";
 import Users from "../Models/user.model.js";
+import AppError from "../Utils/AppError.js";
 
 export const verifyRazorpaySignature = async (
   paymentId,
@@ -10,7 +11,7 @@ export const verifyRazorpaySignature = async (
   razorpaySignature,
 ) => {
   if (!paymentId || !subscriptionOrOrderId || !razorpaySignature) {
-    throw new Error("All fields are required to generate hash.");
+    throw new AppError(400, "All fields are required to generate hash");
   }
   const generatedSignature = Crypto.createHmac(
     "sha256",
@@ -24,7 +25,7 @@ export const verifyRazorpaySignature = async (
 
 export const verifyRazorpayWebhookSignature = (rawBody, razorpaySignature) => {
   if (!rawBody || !razorpaySignature) {
-    throw new Error("All fields are required to generate hash.");
+    throw new AppError(400, "All fields are required to generate hash.");
   }
   const generatedSignature = Crypto.createHmac(
     "sha256",
@@ -78,6 +79,7 @@ export const buildSubscriptionDocument = (subscription) => {
       : null,
   };
 };
+
 export const activateSubscriptionForUser = async (
   razorpaySubscription,
   userId,
