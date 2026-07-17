@@ -22,7 +22,7 @@ router.post("/verify-email", verifyEmailByOtp);
 
 router.get("/me", requireAuth, getCurrentUser);
 
-router.post("/resend-otp-for-passReset", requireAuth, sendOtpForPassReset);
-router.post("/verify-passReset", requireAuth, verifyOtpForPassReset);
+router.post("/resend-otp-for-passReset", sendOtpForPassReset);
+router.post("/verify-passReset", verifyOtpForPassReset);
 
 export default router;

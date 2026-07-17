@@ -8,6 +8,7 @@ cron.schedule("0 * * * *", async () => {
     const now = new Date();
 
     const subscriptions = await Subscriptions.find({
+      isProcessedByCron: false,
       $or: [
         {
           status: "pending",
@@ -21,6 +22,12 @@ cron.schedule("0 * * * *", async () => {
             $lte: now,
           },
         },
+        {
+          status: "completed",
+          currentEnd: {
+            $lte: now,
+          },
+        },
       ],
     });
 
@@ -29,15 +36,13 @@ cron.schedule("0 * * * *", async () => {
 
       if (!user) continue;
 
-      // Downgrade user to free plan
       user.storageLimit = 1024 ** 3;
       user.maxFileSize = 100 * 1024 * 1024;
       user.subscriptionId = null;
 
       await user.save();
 
-      // Mark subscription expired
-      subscription.status = "processed_by_cron";
+      subscription.isProcessedByCron = true;
       subscription.gracePeriodEndsAt = null;
 
       await subscription.save();

@@ -186,9 +186,7 @@ export const login = async (req, res, next) => {
       JSON.stringify({
         userId: user._id,
         email: user.email,
-        storageLimit: user.storageLimit,
         rootDirId: user.rootDirId,
-        role: user.role,
       }),
       "ex",
       60 * 60 * 24 * 30,

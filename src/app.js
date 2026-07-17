@@ -16,6 +16,7 @@ import { requireAuth } from "./Middlewares/auth.middleware.js";
 import { verifyRole } from "./Middlewares/verifyRole.js";
 import Cors from "cors";
 import "./cron/subscription.cron.js";
+import "./cron/uploadCleanup.js";
 
 const app = express();
 
@@ -23,7 +24,7 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 
 app.use(
   Cors({
-    origin: "http://localhost:5173",
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   }),
 );

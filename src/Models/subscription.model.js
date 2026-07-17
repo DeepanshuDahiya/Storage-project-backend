@@ -18,17 +18,19 @@ const subscriptionSchema = new Schema(
     razorpayPlanId: {
       type: String,
       index: true,
+      select: false,
     },
 
     razorpaySubscriptionId: {
       type: String,
       required: true,
       unique: true,
+      select: false,
     },
 
     status: {
       type: String,
-      enum: ["active", "pending", "cancelled", "processed_by_cron"],
+      enum: ["active", "pending", "cancelled", "completed"],
       required: true,
       index: true,
     },
@@ -103,6 +105,10 @@ const subscriptionSchema = new Schema(
     endedAt: {
       type: Date,
       default: null,
+    },
+    isProcessedByCron: {
+      type: Boolean,
+      default: false,
     },
     gracePeriodEndsAt: Date,
   },

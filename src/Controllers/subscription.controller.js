@@ -3,6 +3,7 @@ import Plans from "../Models/plan.model.js";
 import Subscriptions from "../Models/subscription.model.js";
 import {
   activateSubscriptionForUser,
+  cancelRazorpaySubscription,
   createRazorpaySubscription,
   verifyRazorpaySignature,
 } from "../Services/razorpay.service.js";
@@ -19,7 +20,10 @@ export const createSubscription = async (req, res, next) => {
 
     const isExistingSubscription = await Subscriptions.findOne({
       userId: user.userId,
-      status: "active",
+      $or: [
+        { status: "active" },
+        { status: "cancelled", currentEnd: { $gt: new Date() } },
+      ],
     });
 
     if (isExistingSubscription)
@@ -81,6 +85,47 @@ export const verifySubscription = async (req, res, next) => {
     await activateSubscriptionForUser(razorpaySubscription, req.user.userId);
 
     return sendResponse(res, 200, "Subscription verification successful");
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const currentSubscription = async (req, res, next) => {
+  try {
+    const subscription = await Subscriptions.findOne({
+      userId: req.user.userId,
+      status: "active",
+    }).populate(
+      "planId",
+      "name price currency storageLimit maxFileSize billingPeriod",
+    );
+
+    return sendResponse(res, 200, "Current Subscription fetched successfully", {
+      subscription,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const cancelSubscription = async (req, res, next) => {
+  try {
+    const { subscriptionId } = req.body;
+
+    const { razorpaySubscriptionId } = await Subscriptions.findOne({
+      _id: subscriptionId,
+      userId: req.user.userId,
+    }).select("+razorpaySubscriptionId");
+
+    if (!razorpaySubscriptionId)
+      throw new AppError(404, "Subscription with this Id does not exists");
+
+    const cancellationResult = await cancelRazorpaySubscription({
+      subscriptionId: razorpaySubscriptionId,
+    });
+    return sendResponse(res, 200, "Subscription cancelled successfully", {
+      cancellationResult,
+    });
   } catch (error) {
     next(error);
   }

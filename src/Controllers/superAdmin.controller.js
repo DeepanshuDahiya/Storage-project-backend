@@ -4,11 +4,24 @@ import Users from "../Models/user.model.js";
 import AppError from "../Utils/AppError.js";
 import sendResponse from "../Utils/sendResponse.js";
 
+export const findUserDetails = async (req, res, next) => {
+  try {
+    const { email } = req.params;
+
+    const user = await Users.findOne({ email }).select("name email role");
+    if (!user) throw new AppError(404, "User not found");
+
+    return sendResponse(res, 200, "User found", { user });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const makeAdmin = async (req, res, next) => {
   try {
-    const { userId } = req.body;
+    const { email } = req.body;
 
-    const user = await Users.findById(userId);
+    const user = await Users.findOne(email);
 
     if (!user) throw new AppError(404, "User not found");
 
@@ -17,7 +30,7 @@ export const makeAdmin = async (req, res, next) => {
     if (user.role === "superAdmin")
       throw new AppError(403, "Super admin role cannot be modified");
 
-    await Users.findOneAndUpdate({ _id: userId }, { role: "admin" });
+    await Users.findOneAndUpdate({ email }, { role: "admin" });
 
     return sendResponse(res, 200, "User role updated to 'admin' successfully.");
   } catch (error) {
@@ -27,9 +40,9 @@ export const makeAdmin = async (req, res, next) => {
 
 export const makeUser = async (req, res, next) => {
   try {
-    const { userId } = req.body;
+    const { email } = req.body;
 
-    const user = await Users.findById(userId);
+    const user = await Users.findOne(email);
 
     if (!user) throw new AppError(404, "User not found");
 
@@ -38,7 +51,7 @@ export const makeUser = async (req, res, next) => {
     if (user.role === "superAdmin")
       throw new AppError(403, "Super admin role cannot be modified");
 
-    await Users.findOneAndUpdate({ _id: userId }, { role: "user" });
+    await Users.findOneAndUpdate({ email }, { role: "user" });
 
     return sendResponse(res, 200, "User role updated to 'user' successfully.");
   } catch (error) {

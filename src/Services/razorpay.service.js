@@ -100,6 +100,14 @@ export const activateSubscriptionForUser = async (
   );
 };
 
+export const cancelRazorpaySubscription = async ({ subscriptionId }) => {
+  const cancellationResult = await razorpay.subscriptions.cancel(
+    subscriptionId,
+    false,
+  );
+  return cancellationResult;
+};
+
 export const handleChargedSubscription = async (chargedSubscriptionData) => {
   const subscription = await Subscriptions.findOneAndUpdate(
     {
@@ -121,13 +129,16 @@ export const handlePendingSubscription = async (pendingSubscriptionData) => {
   const subscription = await Subscriptions.findOneAndUpdate(
     {
       razorpaySubscriptionId: pendingSubscriptionData.id,
+      status: "active",
     },
     {
       status: pendingSubscriptionData.status,
-      currentStart: new Date(pendingSubscriptionData.currentStart * 1000),
-      currentEnd: new Date(pendingSubscriptionData.currentEnd * 1000),
-      chargeAt: new Date(pendingSubscriptionData.chargeAt * 1000),
-      gracePeriodEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      currentStart: new Date(pendingSubscriptionData.current_start * 1000),
+      currentEnd: new Date(pendingSubscriptionData.current_end * 1000),
+      chargeAt: new Date(pendingSubscriptionData.charge_at * 1000),
+      gracePeriodEndsAt: new Date(
+        pendingSubscriptionData.current_end * 1000 + 7 * 24 * 60 * 60 * 1000,
+      ),
     },
   );
 };
@@ -138,8 +149,22 @@ export const handleCancelledSubscription = async (canceledSubscriptionData) => {
       razorpaySubscriptionId: canceledSubscriptionData.id,
     },
     {
-      status: canceledSubscriptionData.status,
+      status: "cancelled",
     },
   );
   if (!subscription) return false;
+};
+
+export const handleCompletedSubscription = async (
+  completedSubscriptionData,
+) => {
+  const subscription = await Subscriptions.findOneAndUpdate(
+    {
+      razorpaySubscriptionId: canceledSubscriptionData.id,
+    },
+    {
+      status: chargedSubscriptionData.status,
+      endedAt: chargedSubscriptionData.ended_at,
+    },
+  );
 };

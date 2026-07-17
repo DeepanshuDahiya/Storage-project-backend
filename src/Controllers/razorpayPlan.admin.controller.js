@@ -78,9 +78,7 @@ export const createPlan = async (req, res, next) => {
 
 export const getPlans = async (req, res, next) => {
   try {
-    const plans = await Plans.find({
-      isActive: true,
-    });
+    const plans = await Plans.find();
 
     return sendResponse(res, 200, "Plans fetched successfully", { plans });
   } catch (error) {

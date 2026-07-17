@@ -36,12 +36,12 @@ export const handleRazorpayWebhook = async (req, res, next) => {
 
       case "subscription.pending":
         await handlePendingSubscription(data.payload.subscription.entity);
-        // console.log("pending", data.payload.subscription.entity);
+        console.log("pending", data.payload.subscription.entity);
         break;
 
       case "subscription.cancelled":
         await handleCancelledSubscription(data.payload.subscription.entity);
-        // console.log("canceled", data.payload.subscription.entity);
+        console.log("canceled", data.payload.subscription.entity);
         break;
 
       default:
