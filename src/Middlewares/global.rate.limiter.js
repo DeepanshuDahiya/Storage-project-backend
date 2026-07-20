@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import sendResponse from "../Utilities/sendResponse.js";
+import sendResponse from "../Utils/sendResponse.js";
 import { redis } from "../Config/redis.js";
 
 export const globalRateLimiter = async (req, res, next) => {
