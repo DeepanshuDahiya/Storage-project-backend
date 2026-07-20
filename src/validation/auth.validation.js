@@ -26,6 +26,7 @@ export const registerSchema = z
     name,
     email,
     password,
+    confirmPassword,
   })
   .strict()
   .refine((data) => data.password === data.confirmPassword, {
