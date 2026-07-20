@@ -31,32 +31,37 @@ app.use(
   }),
 );
 
-app.use("/webhooks", webhookRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 app.use(express.json());
 app.use(globalRateLimiter);
 
-app.use("/auth", authRoutes);
-app.use("/directory", requireAuth, directoryRoutes);
-app.use("/file", requireAuth, fileRoutes);
-app.use("/subscriptions", requireAuth, subscriptionRoutes);
-app.use("/share", sharedFileRoutes);
-app.use("/users/plans", requireAuth, userPlanRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/directory", requireAuth, directoryRoutes);
+app.use("/api/file", requireAuth, fileRoutes);
+app.use("/api/subscriptions", requireAuth, subscriptionRoutes);
+app.use("/api/share", sharedFileRoutes);
+app.use("/api/users/plans", requireAuth, userPlanRoutes);
 
 app.use(
-  "/admin/plans",
+  "/api/admin/plans",
   requireAuth,
   verifyRole("admin", "superAdmin"),
   razorpayPlanRoutes,
 );
 app.use(
-  "/admin/users",
+  "/api/admin/users",
   requireAuth,
   verifyRole("admin", "superAdmin"),
   handleUsersByAdmin,
 );
 
-app.use("/superAdmin", requireAuth, verifyRole("superAdmin"), SuperAdminRoutes);
+app.use(
+  "/api/superAdmin",
+  requireAuth,
+  verifyRole("superAdmin"),
+  SuperAdminRoutes,
+);
 
 app.use(errorHandler);
 
