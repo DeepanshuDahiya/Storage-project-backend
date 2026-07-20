@@ -24,9 +24,19 @@ const app = express();
 
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
+const allowedOrigins = [
+  "https://storage.codrr.xyz",
+  "https://www.storage.codrr.xyz",
+];
+
 app.use(
-  Cors({
-    origin: process.env.FRONTEND_URL,
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   }),
 );
