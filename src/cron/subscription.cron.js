@@ -1,6 +1,6 @@
 import cron from "node-cron";
-import Users from "../models/user.model.js";
-import Subscriptions from "../models/subscription.model.js";
+import Users from "../Models/user.model.js";
+import Subscriptions from "../Models/subscription.model.js";
 
 cron.schedule("0 * * * *", async () => {
   console.log("cron job working");
