@@ -66,17 +66,17 @@ export const getFileDetailsFromS3 = async ({ key }) => {
 };
 
 export const deleteFilesFromS3 = async ({ keys }) => {
-  const objects = keys?.map((key) => ({ Key: key }));
+  if (keys.length) {
+    const objects = keys.map((key) => ({ Key: key }));
 
-  const deleteCommand = new DeleteObjectsCommand({
-    Bucket: process.env.AWS_S3_BUCKET,
-    Delete: {
-      Objects: objects,
-      Quiet: false,
-    },
-  });
+    const deleteCommand = new DeleteObjectsCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Delete: {
+        Objects: objects,
+        Quiet: false,
+      },
+    });
 
-  if (objects.length) {
     await s3Client.send(deleteCommand);
   }
 };
