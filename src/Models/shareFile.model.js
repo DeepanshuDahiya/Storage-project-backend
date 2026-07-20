@@ -28,6 +28,7 @@ const sharedFileSchema = new Schema(
     password: {
       type: String,
       default: null,
+      select: false,
     },
     expiresAt: {
       type: Date,

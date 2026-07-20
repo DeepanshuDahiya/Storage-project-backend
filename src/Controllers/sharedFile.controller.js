@@ -134,13 +134,21 @@ export const accessSharedFile = async (req, res, next) => {
 
 export const getAllSharedLinksByUser = async (req, res, next) => {
   try {
-    const sharedLinks = await SharedFiles.find({
+    const Links = await SharedFiles.find({
       owner: req.user.userId,
     })
+      .select("+password")
       .populate("fileId", "name size")
       .lean();
 
-    return sendResponse(res, 200, "All shared links found", { sharedLinks });
+    const formattedSharedLinks = Links.map((link) => ({
+      ...link,
+      password: !!link.password,
+    }));
+
+    return sendResponse(res, 200, "All shared links found", {
+      sharedLinks: formattedSharedLinks,
+    });
   } catch (error) {
     next(error);
   }
@@ -151,11 +159,11 @@ export const accessSharedFileMetadata = async (req, res, next) => {
     const share = await SharedFiles.findOne({
       token: req.params.token,
       isActive: true,
-    });
+    }).select("+password");
 
     if (!share) throw new AppError(400, "File link is invalid");
 
-    const isPassRequired = Boolean(share.password);
+    const isPassRequired = !!share.password;
 
     return sendResponse(
       res,
