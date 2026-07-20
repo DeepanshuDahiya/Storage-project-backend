@@ -20,13 +20,13 @@ import {
 export const createDirectory = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
+    const user = req.user;
+
     const { dirName } = await createDirectoryBodySchema.parseAsync(req.body);
     let { parentDirId } = await createDirectoryParamsSchema.parseAsync(
       req.params,
     );
     parentDirId ??= user.rootDirId;
-
-    const user = req.user;
 
     await session.startTransaction();
 

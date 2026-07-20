@@ -15,6 +15,8 @@ import { errorHandler } from "./Middlewares/error.handler.js";
 import { requireAuth } from "./Middlewares/auth.middleware.js";
 import { verifyRole } from "./Middlewares/verifyRole.js";
 import Cors from "cors";
+import { globalRateLimiter } from "./Middlewares/global.rate.limiter.js";
+import "./Workers/otp.worker.js";
 import "./cron/subscription.cron.js";
 import "./cron/uploadCleanup.js";
 
@@ -32,6 +34,7 @@ app.use(
 app.use("/webhooks", webhookRoutes);
 
 app.use(express.json());
+app.use(globalRateLimiter);
 
 app.use("/auth", authRoutes);
 app.use("/directory", requireAuth, directoryRoutes);
