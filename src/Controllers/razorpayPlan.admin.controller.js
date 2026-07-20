@@ -1,4 +1,4 @@
-import razorpay from "../config/razorpay.js";
+import razorpay from "../Config/razorpay.js";
 import Plans from "../models/plan.model.js";
 import AppError from "../Utils/AppError.js";
 import sendResponse from "../Utils/sendResponse.js";

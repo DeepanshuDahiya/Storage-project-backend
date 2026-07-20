@@ -1,6 +1,6 @@
 import app from "./src/app.js";
-import connectDB from "./src/config/db.js";
-import connectRedis from "./src/config/redis.js";
+import connectDB from "./src/Config/db.js";
+import connectRedis from "./src/Config/redis.js";
 
 try {
   await connectDB();

@@ -1,5 +1,5 @@
 import Crypto from "crypto";
-import { redis } from "../config/redis.js";
+import { redis } from "../Config/redis.js";
 import emailQueue from "../Queues/email.queue.js";
 import AppError from "../Utils/AppError.js";
 

@@ -11,7 +11,7 @@ import { sendOtp, verifyOtp } from "../Services/otp.service.js";
 import Directories from "../Models/directory.model.js";
 import bcrypt from "bcrypt";
 import Users from "../Models/user.model.js";
-import { redis } from "../config/redis.js";
+import { redis } from "../Config/redis.js";
 import AppError from "../Utils/AppError.js";
 import sendResponse from "../Utils/sendResponse.js";
 

@@ -1,4 +1,4 @@
-import { redis } from "../config/redis.js";
+import { redis } from "../Config/redis.js";
 import Users from "../Models/user.model.js";
 import AppError from "../Utils/AppError.js";
 

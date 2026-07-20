@@ -40,7 +40,7 @@ export function otpTemplate(name, otp) {
                   font-weight: bold;
                 "
               >
-                💳 PayFlow
+                Stuff Store
               </td>
             </tr>
 
@@ -98,7 +98,7 @@ export function otpTemplate(name, otp) {
                     line-height: 22px;
                   "
                 >
-                  This is an automated email from PayFlow.<br />
+                  This is an automated email from Stuff Store.<br />
                   Please do not reply to this message.
                 </p>
               </td>

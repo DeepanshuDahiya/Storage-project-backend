@@ -1,5 +1,5 @@
 import Crypto from "crypto";
-import razorpay from "../config/razorpay.js";
+import razorpay from "../Config/razorpay.js";
 import Subscriptions from "../Models/subscription.model.js";
 import Plans from "../Models/plan.model.js";
 import Users from "../Models/user.model.js";
