@@ -14,3 +14,4 @@ const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log("Server listening on the port", PORT);
 });
+// comment to push to explore working of aws ec2
