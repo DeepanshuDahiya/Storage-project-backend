@@ -1,4 +1,4 @@
-import Plans from "../models/plan.model.js";
+import Plans from "../Models/plan.model.js";
 import sendResponse from "../Utils/sendResponse.js";
 
 export const getPlans = async (req, res, next) => {

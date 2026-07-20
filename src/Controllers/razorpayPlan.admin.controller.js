@@ -1,5 +1,5 @@
 import razorpay from "../Config/razorpay.js";
-import Plans from "../models/plan.model.js";
+import Plans from "../Models/plan.model.js";
 import AppError from "../Utils/AppError.js";
 import sendResponse from "../Utils/sendResponse.js";
 
