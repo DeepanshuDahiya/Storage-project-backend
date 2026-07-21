@@ -55,6 +55,10 @@ const userSchema = new Schema(
       type: Number,
       default: 10 * 1024 * 1024,
     },
+    maxDevices: {
+      type: Number,
+      default: 1,
+    },
   },
   {
     timestamps: true,
