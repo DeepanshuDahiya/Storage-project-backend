@@ -25,8 +25,7 @@ const userSchema = new Schema(
       type: Schema.Types.ObjectId,
       required: true,
       ref: "Directories",
-      index: true,
-      // unique: true,
+      unique: true,
     },
     isDeleted: {
       type: Boolean,
@@ -46,8 +45,6 @@ const userSchema = new Schema(
     },
     subscriptionId: {
       type: Schema.Types.ObjectId,
-      unique: true,
-      default: null,
       ref: "Subscriptions",
     },
     storageLimit: {
@@ -61,6 +58,16 @@ const userSchema = new Schema(
   },
   {
     timestamps: true,
+  },
+);
+
+userSchema.index(
+  { subscriptionId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      subscriptionId: { $exists: true },
+    },
   },
 );
 
