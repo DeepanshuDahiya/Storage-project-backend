@@ -4,6 +4,7 @@ import {
   handleChargedSubscription,
   verifyRazorpayWebhookSignature,
   handleCancelledSubscription,
+  handleCompletedSubscription,
 } from "../Services/razorpay.service.js";
 import AppError from "../Utils/AppError.js";
 import sendResponse from "../Utils/sendResponse.js";
@@ -42,6 +43,10 @@ export const handleRazorpayWebhook = async (req, res, next) => {
       case "subscription.cancelled":
         await handleCancelledSubscription(data.payload.subscription.entity);
         console.log("canceled", data.payload.subscription.entity);
+        break;
+
+      case "subscription.completed":
+        await handleCompletedSubscription(data.payload.subscription.entity);
         break;
 
       default:

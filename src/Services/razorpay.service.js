@@ -160,11 +160,11 @@ export const handleCompletedSubscription = async (
 ) => {
   const subscription = await Subscriptions.findOneAndUpdate(
     {
-      razorpaySubscriptionId: canceledSubscriptionData.id,
+      razorpaySubscriptionId: completedSubscriptionData.id,
     },
     {
-      status: chargedSubscriptionData.status,
-      endedAt: chargedSubscriptionData.ended_at,
+      status: completedSubscriptionData.status,
+      endedAt: completedSubscriptionData.ended_at,
     },
   );
 };
