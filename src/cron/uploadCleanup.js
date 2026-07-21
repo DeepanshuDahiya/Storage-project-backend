@@ -22,8 +22,6 @@ cron.schedule("0 * * * *", async () => {
     await Files.deleteMany({
       _id: { $in: ids },
     });
-
-    console.log(`Deleted abandoned upload ${file._id}`);
   } catch (err) {
     console.error(err);
   }
