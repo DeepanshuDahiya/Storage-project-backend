@@ -7,7 +7,6 @@ await new Worker(
   "email-otp-queue",
   async (job) => {
     try {
-      console.log(job.data);
       await sendMail({
         to: job.data.email,
         subject: "OTP for email verification",
