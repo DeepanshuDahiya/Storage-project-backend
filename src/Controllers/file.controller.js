@@ -234,7 +234,7 @@ export const deleteFile = async (req, res, next) => {
     await deleteFileFromDB(id, user.userId, session);
     await handleParentDirSize(file.parentDirId, -file.size, session);
 
-    await SharedFiles.deleteOne({ _id: id });
+    await SharedFiles.deleteOne({ fileId: id });
 
     await session.commitTransaction();
 

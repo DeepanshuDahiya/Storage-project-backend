@@ -14,6 +14,7 @@ import Users from "../Models/user.model.js";
 import { redis } from "../Config/redis.js";
 import AppError from "../Utils/AppError.js";
 import sendResponse from "../Utils/sendResponse.js";
+import { UAParser } from "ua-parser-js";
 
 const otpTypes = {
   email_verification: "email-verification",
@@ -100,7 +101,11 @@ export const resendEmailVerificationOtp = async (req, res, next) => {
       purpose: otpTypes.email_verification,
     });
 
-    return sendResponse(res, 200, "OTP sent successfully");
+    return sendResponse(
+      res,
+      200,
+      "OTP sent successfully. If not received, search in Spam mails",
+    );
   } catch (error) {
     next(error);
   }
@@ -134,7 +139,11 @@ export const sendOtpForPassReset = async (req, res, next) => {
       purpose: otpTypes.password_reset,
     });
 
-    return sendResponse(res, 200, "OTP sent successfully");
+    return sendResponse(
+      res,
+      200,
+      "OTP sent successfully. If not received, search in Spam mails",
+    );
   } catch (error) {
     next(error);
   }
@@ -176,27 +185,60 @@ export const login = async (req, res, next) => {
       );
 
     const isValidPassword = await bcrypt.compare(password, user.password);
-
     if (!isValidPassword) throw new AppError(401, "Invalid Credentials");
 
-    let sid = new mongoose.Types.ObjectId().toString();
+    const key = `user_sessions:${user._id}`;
 
-    await redis.set(
-      sid,
-      JSON.stringify({
-        userId: user._id,
-        email: user.email,
-        rootDirId: user.rootDirId,
-      }),
-      "ex",
-      60 * 60 * 24 * 30,
-    );
+    let count = await redis.zcard(key);
+    while (count >= user.maxDevices) {
+      const [oldestSid] = await redis.zrange(key, 0, 0);
+
+      if (!oldestSid) break;
+
+      const exists = await redis.exists(`session:${oldestSid}`);
+
+      if (!exists) {
+        await redis.zrem(key, oldestSid);
+        count = await redis.zcard(key);
+        continue;
+      }
+
+      await redis
+        .multi()
+        .del(`session:${oldestSid}`)
+        .zrem(key, oldestSid)
+        .exec();
+
+      break;
+    }
+
+    const parser = new UAParser(req.headers["user-agent"]);
+    const result = parser.getResult();
+
+    const sid = new mongoose.Types.ObjectId().toString();
+    const sessionData = JSON.stringify({
+      name: user.name,
+      userId: user._id,
+      email: user.email,
+      rootDirId: user.rootDirId,
+      createdAt: Date.now(),
+      lastSeen: Date.now(),
+      browser: result.browser.name,
+      os: result.os.name,
+      deviceType: result.device.type || "Desktop",
+    });
+
+    await redis
+      .multi()
+      .set(`session:${sid}`, sessionData, "EX", 60 * 60 * 24)
+      .zadd(key, Date.now(), sid)
+      .exec();
 
     res.cookie("sid", sid, {
       httpOnly: true,
       signed: true,
       secure: true,
-      sameSite: "none",
+      sameSite: "lax",
       maxAge: 1000 * 60 * 60 * 24 * 30,
     });
 
@@ -208,9 +250,15 @@ export const login = async (req, res, next) => {
 
 export const logout = async (req, res, next) => {
   try {
-    await redis.del(req.signedCookies.sid);
-    res.clearCookie("sid");
+    const sid = req.signedCookies.sid;
 
+    await redis
+      .multi()
+      .del(`session:${sid}`)
+      .zrem(`user_sessions:${req.user.userId}`, sid)
+      .exec();
+
+    res.clearCookie("sid");
     return sendResponse(res, 200, "User logged out successfully");
   } catch (error) {
     next(error);

@@ -11,6 +11,7 @@ import subscriptionRoutes from "./Routes/subscription.routes.js";
 import sharedFileRoutes from "./Routes/sharedFile.routes.js";
 import userPlanRoutes from "./Routes/userPlans.routes.js";
 import webhookRoutes from "./Routes/webhook.routes.js";
+import sessionRoutes from "./Routes/session.routes.js";
 import { errorHandler } from "./Middlewares/error.handler.js";
 import { requireAuth } from "./Middlewares/auth.middleware.js";
 import { verifyRole } from "./Middlewares/verifyRole.js";
@@ -25,6 +26,8 @@ const app = express();
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
 const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:4173",
   "https://storage.codrr.xyz",
   "https://www.storage.codrr.xyz",
 ];
@@ -47,6 +50,7 @@ app.use(express.json());
 app.use(globalRateLimiter);
 
 app.use("/api/auth", authRoutes);
+app.use("/api/sessions", requireAuth, sessionRoutes);
 app.use("/api/directory", requireAuth, directoryRoutes);
 app.use("/api/file", requireAuth, fileRoutes);
 app.use("/api/subscriptions", requireAuth, subscriptionRoutes);

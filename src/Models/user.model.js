@@ -25,6 +25,7 @@ const userSchema = new Schema(
       type: Schema.Types.ObjectId,
       required: true,
       ref: "Directories",
+      index: true,
       // unique: true,
     },
     isDeleted: {
@@ -51,11 +52,11 @@ const userSchema = new Schema(
     },
     storageLimit: {
       type: Number,
-      default: 1024 ** 3,
+      default: 30 * 1024 * 1024,
     },
     maxFileSize: {
       type: Number,
-      default: 100 * 1024 * 1024,
+      default: 10 * 1024 * 1024,
     },
   },
   {

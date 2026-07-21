@@ -40,7 +40,7 @@ export function otpTemplate(name, otp) {
                   font-weight: bold;
                 "
               >
-                Stuff Store
+                Codrr Drive
               </td>
             </tr>
 
@@ -98,7 +98,7 @@ export function otpTemplate(name, otp) {
                     line-height: 22px;
                   "
                 >
-                  This is an automated email from Stuff Store.<br />
+                  This is an automated email from Codrr Drive.<br />
                   Please do not reply to this message.
                 </p>
               </td>

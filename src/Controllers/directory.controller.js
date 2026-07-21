@@ -16,6 +16,7 @@ import {
   renameDirectoryBodySchema,
   renameDirectoryParamsSchema,
 } from "../validation/directory.validation.js";
+import SharedFiles from "../Models/shareFile.model.js";
 
 export const createDirectory = async (req, res, next) => {
   const session = await mongoose.startSession();
@@ -140,6 +141,13 @@ export const deleteDir = async (req, res, next) => {
     await Files.deleteMany(
       {
         _id: { $in: fileIds },
+      },
+      { session },
+    );
+
+    await SharedFiles.deleteMany(
+      {
+        fileId: { $in: fileIds },
       },
       { session },
     );

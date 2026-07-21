@@ -19,6 +19,7 @@ const directorySchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
     files: [{ type: Schema.Types.ObjectId, ref: "Files" }],
     directories: [{ type: Schema.Types.ObjectId, ref: "Directories" }],
