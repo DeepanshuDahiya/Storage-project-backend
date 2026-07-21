@@ -159,7 +159,9 @@ export const accessSharedFileMetadata = async (req, res, next) => {
     const share = await SharedFiles.findOne({
       token: req.params.token,
       isActive: true,
-    }).select("+password");
+    })
+      .select("+password")
+      .populate("owner fileId", "name");
 
     if (!share) throw new AppError(400, "File link is invalid");
 

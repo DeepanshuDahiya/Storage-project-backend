@@ -104,6 +104,7 @@ export const activateSubscriptionForUser = async (
     {
       storageLimit: plan.storageLimit,
       maxFileSize: plan.maxFileSize,
+      maxDevices: plan.maxDevices,
       subscriptionId: subscription._id,
     },
   );

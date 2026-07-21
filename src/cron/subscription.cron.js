@@ -38,6 +38,7 @@ cron.schedule("0 * * * *", async () => {
 
       user.storageLimit = 1024 ** 3;
       user.maxFileSize = 100 * 1024 * 1024;
+      user.maxDevices = 1;
       user.subscriptionId = null;
 
       await user.save();

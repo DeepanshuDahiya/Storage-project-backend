@@ -58,6 +58,7 @@ const userSchema = new Schema(
     maxDevices: {
       type: Number,
       default: 1,
+      min: 1,
     },
   },
   {
