@@ -88,14 +88,14 @@ export const initiateUploadFile = async (req, res, next) => {
       { session },
     );
 
+    await handleParentDirSize(file.parentDirId, file.size, session);
+
     const uploadSignedUrl = await createUploadSignedUrl({
       key: `${fileId}${extension}`,
       contentType,
     });
 
     await session.commitTransaction();
-
-    console.log(uploadSignedUrl);
 
     return sendResponse(res, 200, "File Uploaded initiated successfully", {
       uploadUrl: uploadSignedUrl,
@@ -139,6 +139,7 @@ export const completeFileUpload = async (req, res, next) => {
     if (fileDetails.ContentLength !== file.size) {
       await deleteFilesFromS3({ keys: filename });
       await deleteFileFromDB(fileId, user.userId, session);
+      await handleParentDirSize(file.parentDirId, -file.size, session);
       await session.commitTransaction();
 
       return sendResponse(res, 400, "File size does not match");
@@ -149,8 +150,6 @@ export const completeFileUpload = async (req, res, next) => {
       { $set: { isUploading: false } },
       { session },
     );
-
-    await handleParentDirSize(file.parentDirId, file.size, session);
 
     await session.commitTransaction();
     return sendResponse(res, 201, "File uploaded successfully");
