@@ -84,8 +84,17 @@ export const activateSubscriptionForUser = async (
   razorpaySubscription,
   userId,
 ) => {
-  const subscription = await Subscriptions.create(
-    buildSubscriptionDocument(razorpaySubscription),
+  const subscription = await Subscriptions.findOneAndUpdate(
+    {
+      razorpaySubscriptionId: razorpaySubscription.id,
+    },
+    {
+      $setOnInsert: buildSubscriptionDocument(razorpaySubscription),
+    },
+    {
+      upsert: true,
+      new: true,
+    },
   );
 
   const plan = await Plans.findById(razorpaySubscription.notes.planId);
