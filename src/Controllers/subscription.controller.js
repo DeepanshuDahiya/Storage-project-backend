@@ -31,7 +31,7 @@ export const createSubscription = async (req, res, next) => {
 
     const razorpaySubscriptionId = await createRazorpaySubscription(
       plan,
-      2,
+      24,
       user.userId,
     );
 
@@ -97,7 +97,7 @@ export const currentSubscription = async (req, res, next) => {
       status: "active",
     }).populate(
       "planId",
-      "name price currency storageLimit maxFileSize billingPeriod",
+      "name price currency storageLimit maxFileSize maxDevices billingPeriod",
     );
 
     return sendResponse(res, 200, "Current Subscription fetched successfully", {
