@@ -69,6 +69,13 @@ const planSchema = new Schema(
       required: true,
     },
 
+    maxDevices: {
+      type: Number,
+      required: true,
+      min: [1, "Minimum 1 device must be allowed."],
+      max: [5, "Maximum 5 devices can be allowed."],
+    },
+
     features: {
       type: [featureSchema],
       default: [],
